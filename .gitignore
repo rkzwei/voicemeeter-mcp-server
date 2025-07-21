@@ -52,6 +52,7 @@ samples/
 .pytest_cache/
 .coverage
 htmlcov/
+coverage.xml
 
 # Organizational files (private development files)
 .organization/
