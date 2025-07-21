@@ -29,7 +29,7 @@ jobs:
     
     - name: Run tests with coverage
       run: |
-        pytest --cov --cov-branch --cov-report=xml
+        pytest tests/ --cov=src/voicemeeter_mcp_server --cov-branch --cov-report=xml
       env:
         CODECOV_TOKEN: 2ad8e3aa-3f93-4c42-b5b8-17e90383b162
     
