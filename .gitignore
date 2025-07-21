@@ -53,9 +53,6 @@ samples/
 .coverage
 htmlcov/
 
-# Organizational files (private development files)
-.organization/
-
 # Audio samples (optional - can be regenerated)
 # audio_samples/*.wav
 
