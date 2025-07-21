@@ -52,6 +52,7 @@ samples/
 .pytest_cache/
 .coverage
 htmlcov/
+coverage.xml
 
 # Audio samples (optional - can be regenerated)
 # audio_samples/*.wav
