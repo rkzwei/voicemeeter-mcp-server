@@ -29,17 +29,17 @@ jobs:
     
     - name: Run tests with coverage
       run: |
-        pytest tests/ --cov=src/voicemeeter_mcp_server --cov-branch --cov-report=xml
-      env:
-        CODECOV_TOKEN: 2ad8e3aa-3f93-4c42-b5b8-17e90383b162
+        pytest tests/ --cov=src/voicemeeter_mcp_server --cov-branch --cov-report=xml --cov-report=term
     
     - name: Upload coverage reports to Codecov
-      uses: codecov/codecov-action@v5
+      uses: codecov/codecov-action@v4
       with:
         token: ${{ secrets.CODECOV_TOKEN }}
         file: ./coverage.xml
         flags: unittests
         name: codecov-umbrella
+        fail_ci_if_error: true
+        verbose: true
 
   lint:
     runs-on: ubuntu-latest
