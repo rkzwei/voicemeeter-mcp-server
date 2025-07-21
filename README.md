@@ -1,5 +1,8 @@
 # Voicemeeter MCP Server
 
+[![CI/CD Pipeline](https://github.com/rkzwei/voicemeeter-mcp-server/actions/workflows/ci.yml/badge.svg)](https://github.com/rkzwei/voicemeeter-mcp-server/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/rkzwei/voicemeeter-mcp-server/branch/main/graph/badge.svg)](https://codecov.io/gh/rkzwei/voicemeeter-mcp-server)
+
 A Model Context Protocol (MCP) server that provides AI agents with the ability to control and monitor Voicemeeter audio mixer through the Voicemeeter Remote API.
 
 ## Features
