@@ -1,3 +1,0 @@
-[bandit]
-# Skip XML parsing security warnings for trusted preset files
-skips = B314,B405
