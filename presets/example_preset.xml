@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<voicemeeter_preset>
+    <metadata>
+        <name>Example AI Assistant Preset</name>
+        <description>Example preset for AI assistant audio control</description>
+        <version>1.0</version>
+        <created>2025-01-21</created>
+    </metadata>
+    
+    <!-- Input Strip Configuration -->
+    <strips>
+        <!-- Strip 0: Microphone -->
+        <strip id="0">
+            <param name="Strip[0].label">Microphone</param>
+            <param name="Strip[0].mute">0.0</param>
+            <param name="Strip[0].gain">0.0</param>
+            <param name="Strip[0].A1">1.0</param>
+            <param name="Strip[0].A2">0.0</param>
+            <param name="Strip[0].B1">1.0</param>
+            <param name="Strip[0].comp">2.0</param>
+            <param name="Strip[0].gate">3.0</param>
+        </strip>
+        
+        <!-- Strip 1: System Audio -->
+        <strip id="1">
+            <param name="Strip[1].label">System Audio</param>
+            <param name="Strip[1].mute">0.0</param>
+            <param name="Strip[1].gain">-3.0</param>
+            <param name="Strip[1].A1">1.0</param>
+            <param name="Strip[1].A2">0.0</param>
+            <param name="Strip[1].B1">0.0</param>
+        </strip>
+        
+        <!-- Strip 2: Music/Media -->
+        <strip id="2">
+            <param name="Strip[2].label">Music</param>
+            <param name="Strip[2].mute">0.0</param>
+            <param name="Strip[2].gain">-6.0</param>
+            <param name="Strip[2].A1">1.0</param>
+            <param name="Strip[2].A2">0.0</param>
+            <param name="Strip[2].B1">0.0</param>
+        </strip>
+    </strips>
+    
+    <!-- Output Bus Configuration -->
+    <buses>
+        <!-- Bus A1: Main Output -->
+        <bus id="0">
+            <param name="Bus[0].mute">0.0</param>
+            <param name="Bus[0].gain">0.0</param>
+            <param name="Bus[0].eq.on">1.0</param>
+        </bus>
+        
+        <!-- Bus A2: Recording Output -->
+        <bus id="1">
+            <param name="Bus[1].mute">0.0</param>
+            <param name="Bus[1].gain">-3.0</param>
+            <param name="Bus[1].eq.on">0.0</param>
+        </bus>
+        
+        <!-- Bus B1: Virtual Output -->
+        <bus id="2">
+            <param name="Bus[2].mute">0.0</param>
+            <param name="Bus[2].gain">0.0</param>
+            <param name="Bus[2].eq.on">0.0</param>
+        </bus>
+    </buses>
+    
+    <!-- Common AI Assistant Scenarios -->
+    <scenarios>
+        <scenario name="meeting_mode">
+            <description>Optimized for video calls and meetings</description>
+            <params>
+                <param name="Strip[0].comp">4.0</param>
+                <param name="Strip[0].gate">2.0</param>
+                <param name="Strip[1].gain">-12.0</param>
+                <param name="Strip[2].mute">1.0</param>
+            </params>
+        </scenario>
+        
+        <scenario name="recording_mode">
+            <description>Optimized for content recording</description>
+            <params>
+                <param name="Strip[0].comp">6.0</param>
+                <param name="Strip[0].gate">1.0</param>
+                <param name="Strip[1].mute">1.0</param>
+                <param name="Strip[2].mute">1.0</param>
+                <param name="Bus[1].gain">0.0</param>
+            </params>
+        </scenario>
+        
+        <scenario name="gaming_mode">
+            <description>Optimized for gaming with voice chat</description>
+            <params>
+                <param name="Strip[0].comp">3.0</param>
+                <param name="Strip[1].gain">-6.0</param>
+                <param name="Strip[2].gain">-3.0</param>
+            </params>
+        </scenario>
+    </scenarios>
+</voicemeeter_preset>
