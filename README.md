@@ -1,5 +1,6 @@
 # Voicemeeter MCP Server
 
+[![Tests](https://github.com/rkzwei/voicemeeter-mcp-server/actions/workflows/ci.yml/badge.svg?event=push)](https://github.com/rkzwei/voicemeeter-mcp-server/actions/workflows/ci.yml)
 [![CI/CD Pipeline](https://github.com/rkzwei/voicemeeter-mcp-server/actions/workflows/ci.yml/badge.svg)](https://github.com/rkzwei/voicemeeter-mcp-server/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/rkzwei/voicemeeter-mcp-server/branch/main/graph/badge.svg)](https://codecov.io/gh/rkzwei/voicemeeter-mcp-server)
 

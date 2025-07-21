@@ -30,18 +30,18 @@ class VoicemeeterMCPServer:
     def _is_valid_parameter_name(self, param_name: str) -> bool:
         """Validate parameter name format for security."""
         import re
-        
+
         # Allow only valid Voicemeeter parameter patterns
         # Examples: Strip[0].mute, Bus[1].gain, Strip[2].device.name
-        pattern = r'^(Strip|Bus)\[\d+\]\.[a-zA-Z][a-zA-Z0-9_.]*$'
-        
+        pattern = r"^(Strip|Bus)\[\d+\]\.[a-zA-Z][a-zA-Z0-9_.]*$"
+
         if not re.match(pattern, param_name):
             return False
-            
+
         # Additional length check
         if len(param_name) > 100:
             return False
-            
+
         return True
 
     def _setup_handlers(self):
@@ -527,7 +527,7 @@ class VoicemeeterMCPServer:
                     try:
                         import os
                         import defusedxml.ElementTree as ET
-                        
+
                         # Security: Validate file path and existence
                         if not os.path.exists(preset_path):
                             return [
@@ -536,16 +536,16 @@ class VoicemeeterMCPServer:
                                     text=f"Preset file not found: '{preset_path}'",
                                 )
                             ]
-                        
+
                         # Security: Ensure file has .xml extension
-                        if not preset_path.lower().endswith('.xml'):
+                        if not preset_path.lower().endswith(".xml"):
                             return [
                                 TextContent(
                                     type="text",
                                     text=f"Invalid file type. Only .xml files are supported: '{preset_path}'",
                                 )
                             ]
-                        
+
                         # Security: Check file size (prevent DoS attacks)
                         file_size = os.path.getsize(preset_path)
                         if file_size > 10 * 1024 * 1024:  # 10MB limit
@@ -562,7 +562,7 @@ class VoicemeeterMCPServer:
 
                         applied_count = 0
                         failed_count = 0
-                        
+
                         for param in root.findall(".//param"):
                             name = param.get("name")
                             value = param.text
@@ -572,7 +572,7 @@ class VoicemeeterMCPServer:
                                 if not self._is_valid_parameter_name(name):
                                     failed_count += 1
                                     continue
-                                    
+
                                 try:
                                     # Try as float first
                                     float_value = float(value)
@@ -584,15 +584,19 @@ class VoicemeeterMCPServer:
                                         failed_count += 1
                                 except ValueError:
                                     # Try as string
-                                    if self.vm_api.set_parameter_string(name, str(value)[:256]):  # Limit string length
+                                    if self.vm_api.set_parameter_string(
+                                        name, str(value)[:256]
+                                    ):  # Limit string length
                                         applied_count += 1
                                     else:
                                         failed_count += 1
 
                         result_text = f"Successfully applied {applied_count} parameters from preset '{preset_path}'"
                         if failed_count > 0:
-                            result_text += f" ({failed_count} parameters failed or were invalid)"
-                            
+                            result_text += (
+                                f" ({failed_count} parameters failed or were invalid)"
+                            )
+
                         return [
                             TextContent(
                                 type="text",
