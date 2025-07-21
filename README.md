@@ -278,6 +278,13 @@ Use these files to:
 - Check stereo separation
 - Test parameter changes while audio is playing
 
+## Author
+
+**rkzwei** (rk@rkzwei.dev)
+
+- GitHub: [@rkzwei](https://github.com/rkzwei)
+- Original author and maintainer of Voicemeeter MCP Server
+
 ## License
 
 MIT License - see LICENSE file for details.
