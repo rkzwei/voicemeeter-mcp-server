@@ -102,28 +102,26 @@ class TestVoicemeeterAPI:
 
     def test_get_parameter_float_success(self):
         """Test successful float parameter retrieval."""
-        # Setup mock DLL
+        # Setup mock DLL with proper function signature simulation
         mock_dll = Mock()
-        mock_get_param_func = Mock()
-        mock_get_param_func.return_value = 0  # Success
-        mock_dll.VBVMR_GetParameterFloat = mock_get_param_func
+        
+        # Create a mock function that properly simulates the DLL behavior
+        def mock_get_param_func(param_name, value_ptr):
+            # Simulate the DLL writing to the pointer
+            # Access the original ctypes object through _obj
+            if hasattr(value_ptr, '_obj'):
+                value_ptr._obj.value = 0.5
+            return 0  # Success
+        
+        mock_dll.VBVMR_GetParameterFloat = Mock(side_effect=mock_get_param_func)
 
         self.api._dll = mock_dll
         self.api._is_connected = True
 
-        # Mock ctypes behavior
-        with patch("ctypes.c_float") as mock_c_float, patch(
-            "ctypes.byref"
-        ) as mock_byref:
+        result = self.api.get_parameter_float("Strip[0].mute")
 
-            mock_value = Mock()
-            mock_value.value = 0.5
-            mock_c_float.return_value = mock_value
-
-            result = self.api.get_parameter_float("Strip[0].mute")
-
-            assert result == 0.5
-            mock_get_param_func.assert_called_once()
+        assert result == 0.5
+        mock_dll.VBVMR_GetParameterFloat.assert_called_once()
 
     def test_get_parameter_float_not_connected(self):
         """Test float parameter retrieval when not connected."""
