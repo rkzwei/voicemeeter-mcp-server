@@ -24,8 +24,7 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install -e .
-        pip install pytest pytest-cov pytest-asyncio defusedxml
+        pip install -e ".[dev]"
     
     - name: Run tests with coverage
       run: |
@@ -54,10 +53,13 @@ jobs:
     - name: Install linting tools
       run: |
         python -m pip install --upgrade pip
-        pip install black flake8 mypy
+        pip install black isort flake8 mypy
     
     - name: Run black
       run: black --check src/ tests/
+    
+    - name: Run isort
+      run: isort --check-only src/ tests/
     
     - name: Run flake8
       run: flake8 src/ tests/
