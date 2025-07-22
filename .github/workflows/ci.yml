@@ -68,7 +68,7 @@ jobs:
       run: flake8 src/ tests/
     
     - name: Run mypy
-      run: mypy src/ || echo "Mypy check completed with warnings - will be addressed in future task"
+      run: mypy src/
 
   build:
     runs-on: ubuntu-latest
