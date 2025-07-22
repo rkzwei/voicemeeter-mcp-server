@@ -12,7 +12,7 @@ This module provides advanced preset management capabilities including:
 import json
 import os
 import shutil
-import xml.etree.ElementTree as ET
+import defusedxml.ElementTree as ET
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Any, Union

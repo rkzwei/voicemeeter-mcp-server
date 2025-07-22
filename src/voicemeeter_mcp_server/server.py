@@ -732,8 +732,10 @@ class VoicemeeterMCPServer:
 
                                     # At this point, param_value is guaranteed to be a string
                                     if not isinstance(param_value, str):
-                                        raise ValueError(f"Parameter value must be a string, got {type(param_value)}")
-                                    
+                                        raise ValueError(
+                                            f"Parameter value must be a string, got {type(param_value)}"
+                                        )
+
                                     try:
                                         # Try as float first
                                         float_value = float(param_value)
