@@ -1009,10 +1009,7 @@ class VoicemeeterMCPServer:
 
             from mcp.types import (
                 AudioContent,
-                EmbeddedResource,
-                ImageContent,
                 ResourceLink,
-                TextContent,
             )
 
             content_union = cast(

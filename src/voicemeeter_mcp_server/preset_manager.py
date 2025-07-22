@@ -237,9 +237,7 @@ class PresetManager:
             logger.error(error_msg)
             raise PresetValidationError(error_msg) from e
 
-    def _find_element_safe(
-        self, parent: Optional[Any], tag: str
-    ) -> Optional[Any]:
+    def _find_element_safe(self, parent: Optional[Any], tag: str) -> Optional[Any]:
         """Safely find a child element, returning None if not found
 
         Args:
@@ -931,7 +929,8 @@ class PresetManager:
             xml_lines.append(f'        <strip id="{strip.id}">')
             for param in strip.parameters:
                 xml_lines.append(
-                    f'            <param name="{self._escape_xml(param.name)}">{self._escape_xml(str(param.value))}</param>'
+                    f'            <param name="{self._escape_xml(param.name)}">'
+                    f"{self._escape_xml(str(param.value))}</param>"
                 )
             xml_lines.append("        </strip>")
         xml_lines.append("    </strips>")
@@ -942,7 +941,8 @@ class PresetManager:
             xml_lines.append(f'        <bus id="{bus.id}">')
             for param in bus.parameters:
                 xml_lines.append(
-                    f'            <param name="{self._escape_xml(param.name)}">{self._escape_xml(str(param.value))}</param>'
+                    f'            <param name="{self._escape_xml(param.name)}">'
+                    f"{self._escape_xml(str(param.value))}</param>"
                 )
             xml_lines.append("        </bus>")
         xml_lines.append("    </buses>")
@@ -959,7 +959,8 @@ class PresetManager:
             xml_lines.append("            <params>")
             for param in scenario.parameters:
                 xml_lines.append(
-                    f'                <param name="{self._escape_xml(param.name)}">{self._escape_xml(str(param.value))}</param>'
+                    f'                <param name="{self._escape_xml(param.name)}">'
+                    f"{self._escape_xml(str(param.value))}</param>"
                 )
             xml_lines.append("            </params>")
             xml_lines.append("        </scenario>")

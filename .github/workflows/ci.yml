@@ -122,7 +122,3 @@ jobs:
       uses: pyupio/safety-action@v1
       with:
         api-key: ${{ secrets.SAFETY_API_KEY }}
-        
-    - name: Check dependencies for security vulnerabilities (fallback)
-      run: safety scan
-      continue-on-error: true
