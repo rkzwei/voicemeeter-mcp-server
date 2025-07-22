@@ -293,7 +293,7 @@ class TestVoicemeeterMCPServer:
         """Test listing available tools."""
         tools = await self.server.list_tools()
 
-        # Should have all expected tools
+        # Should have all expected tools including new preset management tools
         tool_names = [t.name for t in tools]
         expected_tools = [
             "voicemeeter_connect",
@@ -303,6 +303,11 @@ class TestVoicemeeterMCPServer:
             "voicemeeter_set_parameter",
             "voicemeeter_get_levels",
             "voicemeeter_load_preset",
+            "voicemeeter_validate_preset",
+            "voicemeeter_compare_presets",
+            "voicemeeter_backup_preset",
+            "voicemeeter_list_presets",
+            "voicemeeter_create_template",
         ]
 
         for expected_tool in expected_tools:
@@ -661,6 +666,372 @@ class TestVoicemeeterMCPServer:
             assert isinstance(result[0], TextContent)
             assert "Successfully applied 0 parameters" in result[0].text
             assert "1 parameters failed" in result[0].text
+
+    @pytest.mark.asyncio
+    async def test_call_tool_validate_preset_xml_success(self):
+        """Test successful XML preset validation."""
+        # Mock preset manager
+        mock_preset = Mock()
+        mock_preset.metadata.name = "Test Preset"
+        mock_preset.metadata.checksum = "abc123"
+        
+        mock_preset_manager = Mock()
+        mock_preset_manager.load_xml_preset.return_value = mock_preset
+        self.server.preset_manager = mock_preset_manager
+
+        result = await self.server.call_tool(
+            "voicemeeter_validate_preset", {"preset_path": "/path/to/preset.xml"}
+        )
+
+        assert len(result) == 1
+        assert isinstance(result[0], TextContent)
+        assert "Test Preset" in result[0].text
+        assert "is valid ✅" in result[0].text
+        assert "abc123" in result[0].text
+
+    @pytest.mark.asyncio
+    async def test_call_tool_validate_preset_json_success(self):
+        """Test successful JSON preset validation."""
+        # Mock preset manager
+        mock_preset = Mock()
+        mock_preset.metadata.name = "JSON Preset"
+        mock_preset.metadata.checksum = "def456"
+        
+        mock_preset_manager = Mock()
+        mock_preset_manager.load_preset_json.return_value = mock_preset
+        self.server.preset_manager = mock_preset_manager
+
+        result = await self.server.call_tool(
+            "voicemeeter_validate_preset", {"preset_path": "/path/to/preset.json"}
+        )
+
+        assert len(result) == 1
+        assert isinstance(result[0], TextContent)
+        assert "JSON Preset" in result[0].text
+        assert "is valid ✅" in result[0].text
+
+    @pytest.mark.asyncio
+    async def test_call_tool_validate_preset_unsupported_type(self):
+        """Test preset validation with unsupported file type."""
+        result = await self.server.call_tool(
+            "voicemeeter_validate_preset", {"preset_path": "/path/to/preset.txt"}
+        )
+
+        assert len(result) == 1
+        assert isinstance(result[0], TextContent)
+        assert "Unsupported file type" in result[0].text
+
+    @pytest.mark.asyncio
+    async def test_call_tool_validate_preset_validation_error(self):
+        """Test preset validation with validation error."""
+        from voicemeeter_mcp_server.preset_manager import PresetValidationError
+        
+        mock_preset_manager = Mock()
+        mock_preset_manager.load_xml_preset.side_effect = PresetValidationError("Invalid schema")
+        self.server.preset_manager = mock_preset_manager
+
+        result = await self.server.call_tool(
+            "voicemeeter_validate_preset", {"preset_path": "/path/to/preset.xml"}
+        )
+
+        assert len(result) == 1
+        assert isinstance(result[0], TextContent)
+        assert "validation failed ❌" in result[0].text
+        assert "Invalid schema" in result[0].text
+
+    @pytest.mark.asyncio
+    async def test_call_tool_compare_presets_success(self):
+        """Test successful preset comparison."""
+        # Mock presets
+        mock_preset1 = Mock()
+        mock_preset1.metadata.name = "Preset 1"
+        mock_preset2 = Mock()
+        mock_preset2.metadata.name = "Preset 2"
+        
+        # Mock comparison result
+        mock_comparison = {
+            "summary": {
+                "total_changes": 3,
+                "strips_modified": 1,
+                "buses_modified": 1,
+                "scenarios_modified": 1
+            }
+        }
+        
+        mock_preset_manager = Mock()
+        mock_preset_manager.load_xml_preset.side_effect = [mock_preset1, mock_preset2]
+        mock_preset_manager.compare_presets.return_value = mock_comparison
+        self.server.preset_manager = mock_preset_manager
+
+        result = await self.server.call_tool(
+            "voicemeeter_compare_presets", 
+            {"preset1_path": "/path/to/preset1.xml", "preset2_path": "/path/to/preset2.xml"}
+        )
+
+        assert len(result) == 1
+        assert isinstance(result[0], TextContent)
+        assert "Preset Comparison" in result[0].text
+        assert "Total changes: 3" in result[0].text
+
+    @pytest.mark.asyncio
+    async def test_call_tool_compare_presets_identical(self):
+        """Test comparing identical presets."""
+        # Mock presets
+        mock_preset1 = Mock()
+        mock_preset1.metadata.name = "Preset 1"
+        mock_preset2 = Mock()
+        mock_preset2.metadata.name = "Preset 2"
+        
+        # Mock comparison result - identical
+        mock_comparison = {
+            "summary": {
+                "total_changes": 0,
+                "strips_modified": 0,
+                "buses_modified": 0,
+                "scenarios_modified": 0
+            }
+        }
+        
+        mock_preset_manager = Mock()
+        mock_preset_manager.load_xml_preset.side_effect = [mock_preset1, mock_preset2]
+        mock_preset_manager.compare_presets.return_value = mock_comparison
+        self.server.preset_manager = mock_preset_manager
+
+        result = await self.server.call_tool(
+            "voicemeeter_compare_presets", 
+            {"preset1_path": "/path/to/preset1.xml", "preset2_path": "/path/to/preset2.xml"}
+        )
+
+        assert len(result) == 1
+        assert isinstance(result[0], TextContent)
+        assert "✅ Presets are identical" in result[0].text
+
+    @pytest.mark.asyncio
+    async def test_call_tool_backup_preset_success(self):
+        """Test successful preset backup."""
+        mock_preset_manager = Mock()
+        mock_preset_manager.create_backup.return_value = "/backups/preset_20250121_100000.xml"
+        self.server.preset_manager = mock_preset_manager
+
+        result = await self.server.call_tool(
+            "voicemeeter_backup_preset", {"preset_path": "/path/to/preset.xml"}
+        )
+
+        assert len(result) == 1
+        assert isinstance(result[0], TextContent)
+        assert "Backup created successfully" in result[0].text
+        assert "/backups/preset_20250121_100000.xml" in result[0].text
+
+    @pytest.mark.asyncio
+    async def test_call_tool_backup_preset_error(self):
+        """Test preset backup with error."""
+        mock_preset_manager = Mock()
+        mock_preset_manager.create_backup.side_effect = Exception("Backup failed")
+        self.server.preset_manager = mock_preset_manager
+
+        result = await self.server.call_tool(
+            "voicemeeter_backup_preset", {"preset_path": "/path/to/preset.xml"}
+        )
+
+        assert len(result) == 1
+        assert isinstance(result[0], TextContent)
+        assert "Error creating backup" in result[0].text
+        assert "Backup failed" in result[0].text
+
+    @pytest.mark.asyncio
+    async def test_call_tool_list_presets_success(self):
+        """Test successful preset listing."""
+        mock_presets = [
+            {
+                "name": "preset1",
+                "extension": ".xml",
+                "path": "/presets/preset1.xml",
+                "size": 1024,
+                "modified": "2025-01-21T10:00:00"
+            },
+            {
+                "name": "preset2",
+                "extension": ".json",
+                "path": "/presets/preset2.json",
+                "size": 2048,
+                "modified": "2025-01-21T11:00:00"
+            }
+        ]
+        
+        mock_preset_manager = Mock()
+        mock_preset_manager.list_presets.return_value = mock_presets
+        self.server.preset_manager = mock_preset_manager
+
+        result = await self.server.call_tool("voicemeeter_list_presets", {})
+
+        assert len(result) == 1
+        assert isinstance(result[0], TextContent)
+        assert "Found 2 preset file(s)" in result[0].text
+        assert "preset1.xml" in result[0].text
+        assert "preset2.json" in result[0].text
+        assert "1024 bytes" in result[0].text
+
+    @pytest.mark.asyncio
+    async def test_call_tool_list_presets_empty(self):
+        """Test preset listing with no presets."""
+        mock_preset_manager = Mock()
+        mock_preset_manager.list_presets.return_value = []
+        self.server.preset_manager = mock_preset_manager
+
+        result = await self.server.call_tool("voicemeeter_list_presets", {})
+
+        assert len(result) == 1
+        assert isinstance(result[0], TextContent)
+        assert "No preset files found" in result[0].text
+
+    @pytest.mark.asyncio
+    async def test_call_tool_list_presets_with_extension_filter(self):
+        """Test preset listing with extension filter."""
+        mock_presets = [
+            {
+                "name": "preset1",
+                "extension": ".xml",
+                "path": "/presets/preset1.xml",
+                "size": 1024,
+                "modified": "2025-01-21T10:00:00"
+            }
+        ]
+        
+        mock_preset_manager = Mock()
+        mock_preset_manager.list_presets.return_value = mock_presets
+        self.server.preset_manager = mock_preset_manager
+
+        result = await self.server.call_tool(
+            "voicemeeter_list_presets", {"extension": ".xml"}
+        )
+
+        assert len(result) == 1
+        assert isinstance(result[0], TextContent)
+        assert "Found 1 preset file(s)" in result[0].text
+        mock_preset_manager.list_presets.assert_called_with(".xml")
+
+    @pytest.mark.asyncio
+    async def test_call_tool_create_template_success(self):
+        """Test successful template creation."""
+        # Mock template preset
+        mock_template = Mock()
+        mock_template.strips = [Mock(), Mock(), Mock()]  # 3 strips
+        mock_template.buses = [Mock(), Mock()]  # 2 buses
+        mock_template.scenarios = [Mock()]  # 1 scenario
+        
+        mock_preset_manager = Mock()
+        mock_preset_manager.create_template.return_value = mock_template
+        self.server.preset_manager = mock_preset_manager
+
+        result = await self.server.call_tool(
+            "voicemeeter_create_template", 
+            {"template_name": "Test Template", "voicemeeter_type": "basic"}
+        )
+
+        assert len(result) == 1
+        assert isinstance(result[0], TextContent)
+        assert "Created template 'Test Template'" in result[0].text
+        assert "Voicemeeter Basic" in result[0].text
+        assert "3 strips configured" in result[0].text
+        assert "2 buses configured" in result[0].text
+        assert "1 scenarios included" in result[0].text
+
+    @pytest.mark.asyncio
+    async def test_call_tool_create_template_with_json_save(self):
+        """Test template creation with JSON save."""
+        # Mock template preset
+        mock_template = Mock()
+        mock_template.strips = [Mock() for _ in range(8)]  # 8 strips for potato
+        mock_template.buses = [Mock() for _ in range(5)]   # 5 buses for potato
+        mock_template.scenarios = [Mock()]
+        
+        mock_preset_manager = Mock()
+        mock_preset_manager.create_template.return_value = mock_template
+        self.server.preset_manager = mock_preset_manager
+
+        result = await self.server.call_tool(
+            "voicemeeter_create_template", 
+            {
+                "template_name": "Potato Template", 
+                "voicemeeter_type": "potato",
+                "save_path": "/templates/potato.json"
+            }
+        )
+
+        assert len(result) == 1
+        assert isinstance(result[0], TextContent)
+        assert "Created template 'Potato Template'" in result[0].text
+        assert "✅ Template saved to: /templates/potato.json" in result[0].text
+        mock_preset_manager.save_preset_json.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_call_tool_create_template_with_xml_save(self):
+        """Test template creation with XML export."""
+        # Mock template preset
+        mock_template = Mock()
+        mock_template.strips = [Mock() for _ in range(5)]  # 5 strips for banana
+        mock_template.buses = [Mock() for _ in range(3)]   # 3 buses for banana
+        mock_template.scenarios = [Mock()]
+        
+        mock_preset_manager = Mock()
+        mock_preset_manager.create_template.return_value = mock_template
+        self.server.preset_manager = mock_preset_manager
+
+        result = await self.server.call_tool(
+            "voicemeeter_create_template", 
+            {
+                "template_name": "Banana Template", 
+                "voicemeeter_type": "banana",
+                "save_path": "/templates/banana.xml"
+            }
+        )
+
+        assert len(result) == 1
+        assert isinstance(result[0], TextContent)
+        assert "Created template 'Banana Template'" in result[0].text
+        assert "✅ Template exported to: /templates/banana.xml" in result[0].text
+        mock_preset_manager.export_preset_xml.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_call_tool_create_template_invalid_extension(self):
+        """Test template creation with invalid file extension."""
+        # Mock template preset
+        mock_template = Mock()
+        mock_template.strips = []
+        mock_template.buses = []
+        mock_template.scenarios = []
+        
+        mock_preset_manager = Mock()
+        mock_preset_manager.create_template.return_value = mock_template
+        self.server.preset_manager = mock_preset_manager
+
+        result = await self.server.call_tool(
+            "voicemeeter_create_template", 
+            {
+                "template_name": "Test Template",
+                "save_path": "/templates/template.txt"
+            }
+        )
+
+        assert len(result) == 1
+        assert isinstance(result[0], TextContent)
+        assert "⚠️ Invalid file extension" in result[0].text
+
+    @pytest.mark.asyncio
+    async def test_call_tool_create_template_error(self):
+        """Test template creation with error."""
+        mock_preset_manager = Mock()
+        mock_preset_manager.create_template.side_effect = Exception("Template creation failed")
+        self.server.preset_manager = mock_preset_manager
+
+        result = await self.server.call_tool(
+            "voicemeeter_create_template", {"template_name": "Test Template"}
+        )
+
+        assert len(result) == 1
+        assert isinstance(result[0], TextContent)
+        assert "Error creating template" in result[0].text
+        assert "Template creation failed" in result[0].text
 
     @pytest.mark.asyncio
     async def test_call_tool_unknown(self):
