@@ -20,7 +20,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 import defusedxml.ElementTree as ET
-from defusedxml.ElementTree import Element, ElementTree, SubElement
+from xml.etree.ElementTree import Element, ElementTree, SubElement
 import jsonschema
 
 logger = logging.getLogger(__name__)
