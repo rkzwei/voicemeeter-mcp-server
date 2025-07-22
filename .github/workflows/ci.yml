@@ -122,3 +122,12 @@ jobs:
       uses: pyupio/safety-action@v1
       with:
         api-key: ${{ secrets.SAFETY_API_KEY }}
+        scan: true
+      continue-on-error: false
+    
+    - name: Fallback Safety CLI scan
+      if: failure()
+      run: |
+        echo "Safety Action failed, running fallback CLI scan..."
+        safety check --json || echo "Safety CLI scan completed with warnings"
+      continue-on-error: true
