@@ -9,17 +9,19 @@ This module provides advanced preset management capabilities including:
 - Error handling and recovery
 """
 
+import hashlib
 import json
+import logging
 import os
 import shutil
-import defusedxml.ElementTree as ET
+from dataclasses import asdict, dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Any, Union
-import hashlib
+from typing import Any, Dict, List, Optional, Tuple, Union
+from xml.etree.ElementTree import Element, ElementTree, SubElement, indent
+
+import defusedxml.ElementTree as ET
 import jsonschema
-from dataclasses import dataclass, asdict
-import logging
 
 logger = logging.getLogger(__name__)
 
@@ -844,59 +846,59 @@ class PresetManager:
             preset: VoicemeeterPreset object
             xml_path: Path to save XML file
         """
-        root = ET.Element("voicemeeter_preset")
+        root = Element("voicemeeter_preset")
 
         # Add metadata
-        metadata_elem = ET.SubElement(root, "metadata")
-        ET.SubElement(metadata_elem, "name").text = preset.metadata.name
-        ET.SubElement(metadata_elem, "description").text = preset.metadata.description
-        ET.SubElement(metadata_elem, "version").text = preset.metadata.version
-        ET.SubElement(metadata_elem, "created").text = preset.metadata.created
+        metadata_elem = SubElement(root, "metadata")
+        SubElement(metadata_elem, "name").text = preset.metadata.name
+        SubElement(metadata_elem, "description").text = preset.metadata.description
+        SubElement(metadata_elem, "version").text = preset.metadata.version
+        SubElement(metadata_elem, "created").text = preset.metadata.created
 
         if preset.metadata.author:
-            ET.SubElement(metadata_elem, "author").text = preset.metadata.author
+            SubElement(metadata_elem, "author").text = preset.metadata.author
         if preset.metadata.voicemeeter_type:
-            ET.SubElement(metadata_elem, "voicemeeter_type").text = (
+            SubElement(metadata_elem, "voicemeeter_type").text = (
                 preset.metadata.voicemeeter_type
             )
 
         if preset.metadata.tags:
-            tags_elem = ET.SubElement(metadata_elem, "tags")
+            tags_elem = SubElement(metadata_elem, "tags")
             for tag in preset.metadata.tags:
-                ET.SubElement(tags_elem, "tag").text = tag
+                SubElement(tags_elem, "tag").text = tag
 
         # Add strips
-        strips_elem = ET.SubElement(root, "strips")
+        strips_elem = SubElement(root, "strips")
         for strip in preset.strips:
-            strip_elem = ET.SubElement(strips_elem, "strip", id=str(strip.id))
+            strip_elem = SubElement(strips_elem, "strip", id=str(strip.id))
             for param in strip.parameters:
-                param_elem = ET.SubElement(strip_elem, "param", name=param.name)
+                param_elem = SubElement(strip_elem, "param", name=param.name)
                 param_elem.text = str(param.value)
 
         # Add buses
-        buses_elem = ET.SubElement(root, "buses")
+        buses_elem = SubElement(root, "buses")
         for bus in preset.buses:
-            bus_elem = ET.SubElement(buses_elem, "bus", id=str(bus.id))
+            bus_elem = SubElement(buses_elem, "bus", id=str(bus.id))
             for param in bus.parameters:
-                param_elem = ET.SubElement(bus_elem, "param", name=param.name)
+                param_elem = SubElement(bus_elem, "param", name=param.name)
                 param_elem.text = str(param.value)
 
         # Add scenarios
-        scenarios_elem = ET.SubElement(root, "scenarios")
+        scenarios_elem = SubElement(root, "scenarios")
         for scenario in preset.scenarios:
-            scenario_elem = ET.SubElement(
+            scenario_elem = SubElement(
                 scenarios_elem, "scenario", name=scenario.name
             )
-            ET.SubElement(scenario_elem, "description").text = scenario.description
+            SubElement(scenario_elem, "description").text = scenario.description
 
-            params_elem = ET.SubElement(scenario_elem, "params")
+            params_elem = SubElement(scenario_elem, "params")
             for param in scenario.parameters:
-                param_elem = ET.SubElement(params_elem, "param", name=param.name)
+                param_elem = SubElement(params_elem, "param", name=param.name)
                 param_elem.text = str(param.value)
 
         # Write to file with proper formatting
-        tree = ET.ElementTree(root)
-        ET.indent(tree, space="    ", level=0)
+        tree = ElementTree(root)
+        indent(tree, space="    ", level=0)
         tree.write(xml_path, encoding="utf-8", xml_declaration=True)
 
         logger.info(f"Preset exported to XML: {xml_path}")

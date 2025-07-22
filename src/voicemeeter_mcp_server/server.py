@@ -15,11 +15,10 @@ from mcp.types import (
     TextContent,
     Tool,
 )
-from pydantic import AnyUrl
-from pydantic import BaseModel, Field
+from pydantic import AnyUrl, BaseModel, Field
 
-from .voicemeeter_api import VoicemeeterAPI, VoicemeeterType
 from .preset_manager import PresetManager, PresetValidationError
+from .voicemeeter_api import VoicemeeterAPI, VoicemeeterType
 
 
 class VoicemeeterMCPServer:
