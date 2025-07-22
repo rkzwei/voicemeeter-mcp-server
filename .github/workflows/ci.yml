@@ -68,7 +68,7 @@ jobs:
       run: flake8 src/ tests/
     
     - name: Run mypy
-      run: mypy src/ || echo "Mypy check completed with warnings - will be addressed in future task"
+      run: mypy src/
 
   build:
     runs-on: ubuntu-latest
@@ -118,5 +118,11 @@ jobs:
     - name: Run bandit security scan
       run: bandit -r src/
     
-    - name: Check dependencies for security vulnerabilities
+    - name: Run Safety CLI to check for vulnerabilities
+      uses: pyupio/safety-action@v1
+      with:
+        api-key: ${{ secrets.SAFETY_API_KEY }}
+        
+    - name: Check dependencies for security vulnerabilities (fallback)
       run: safety scan
+      continue-on-error: true

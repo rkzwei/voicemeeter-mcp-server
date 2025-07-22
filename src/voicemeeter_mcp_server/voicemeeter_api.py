@@ -20,7 +20,7 @@ class VoicemeeterType(Enum):
 class VoicemeeterAPI:
     """Wrapper for Voicemeeter Remote API."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._dll: Optional[ctypes.CDLL] = None
         self._is_connected = False
         self._vm_type: Optional[VoicemeeterType] = None
@@ -140,7 +140,7 @@ class VoicemeeterAPI:
 
             result = logout_func()
             self._is_connected = False
-            return result == 0
+            return bool(result == 0)
         except Exception:
             self._is_connected = False
             return False
@@ -200,7 +200,7 @@ class VoicemeeterAPI:
             set_param_func.argtypes = [ctypes.c_char_p, ctypes.c_float]
 
             result = set_param_func(param_name.encode("ascii"), ctypes.c_float(value))
-            return result == 0
+            return bool(result == 0)
         except Exception:
             return False
 
@@ -234,7 +234,7 @@ class VoicemeeterAPI:
             set_param_func.argtypes = [ctypes.c_char_p, ctypes.c_char_p]
 
             result = set_param_func(param_name.encode("ascii"), value.encode("ascii"))
-            return result == 0
+            return bool(result == 0)
         except Exception:
             return False
 
@@ -249,7 +249,7 @@ class VoicemeeterAPI:
             run_func.argtypes = [ctypes.c_long]
 
             result = run_func(vm_type.value)
-            return result == 0
+            return bool(result == 0)
         except Exception:
             return False
 
@@ -263,7 +263,7 @@ class VoicemeeterAPI:
             dirty_func.restype = ctypes.c_long
 
             result = dirty_func()
-            return result > 0
+            return bool(result > 0)
         except Exception:
             return False
 
@@ -320,11 +320,11 @@ class VoicemeeterAPI:
         """Get the type of Voicemeeter running."""
         return self._vm_type
 
-    def __enter__(self):
+    def __enter__(self) -> "VoicemeeterAPI":
         """Context manager entry."""
         self.login()
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
         """Context manager exit."""
         self.logout()

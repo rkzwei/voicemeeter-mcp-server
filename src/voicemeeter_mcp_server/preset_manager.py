@@ -17,11 +17,13 @@ import shutil
 from dataclasses import asdict, dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, Union, cast
 
 import defusedxml.ElementTree as ET
 import jsonschema
-from defusedxml.ElementTree import Element, ElementTree, SubElement
+
+# Use defusedxml for all XML operations to prevent XML attacks
+# Use Any for XML element types to avoid importing unsafe xml.etree.ElementTree
 
 logger = logging.getLogger(__name__)
 
@@ -235,6 +237,22 @@ class PresetManager:
             logger.error(error_msg)
             raise PresetValidationError(error_msg) from e
 
+    def _find_element_safe(
+        self, parent: Optional[Any], tag: str
+    ) -> Optional[Any]:
+        """Safely find a child element, returning None if not found
+
+        Args:
+            parent: Parent element to search in (can be None)
+            tag: Tag name to search for
+
+        Returns:
+            Element if found, None otherwise
+        """
+        if parent is None:
+            return None
+        return parent.find(tag)
+
     def load_xml_preset(self, xml_path: str) -> VoicemeeterPreset:
         """Load preset from XML file and convert to structured format
 
@@ -252,7 +270,7 @@ class PresetManager:
             root = tree.getroot()
 
             # Extract metadata
-            metadata_elem = root.find("metadata")
+            metadata_elem = self._find_element_safe(root, "metadata")
             if metadata_elem is None:
                 raise PresetValidationError("Missing metadata section in XML preset")
 
@@ -266,7 +284,7 @@ class PresetManager:
             )
 
             # Extract tags if present
-            tags_elem = metadata_elem.find("tags")
+            tags_elem = self._find_element_safe(metadata_elem, "tags")
             if tags_elem is not None:
                 metadata.tags = [
                     tag.text for tag in tags_elem.findall("tag") if tag.text
@@ -274,7 +292,7 @@ class PresetManager:
 
             # Extract strips
             strips = []
-            strips_elem = root.find("strips")
+            strips_elem = self._find_element_safe(root, "strips")
             if strips_elem is not None:
                 for strip_elem in strips_elem.findall("strip"):
                     strip_id = int(strip_elem.get("id", 0))
@@ -286,20 +304,23 @@ class PresetManager:
 
                         if param_name and param_value is not None:
                             # Try to convert to float if possible
+                            strip_param_value: Union[str, float, int] = param_value
                             try:
-                                param_value = float(param_value)
+                                strip_param_value = float(param_value)
                             except ValueError:
                                 pass  # Keep as string
 
                             parameters.append(
-                                PresetParameter(name=param_name, value=param_value)
+                                PresetParameter(
+                                    name=param_name, value=strip_param_value
+                                )
                             )
 
                     strips.append(PresetStrip(id=strip_id, parameters=parameters))
 
             # Extract buses
             buses = []
-            buses_elem = root.find("buses")
+            buses_elem = self._find_element_safe(root, "buses")
             if buses_elem is not None:
                 for bus_elem in buses_elem.findall("bus"):
                     bus_id = int(bus_elem.get("id", 0))
@@ -311,27 +332,28 @@ class PresetManager:
 
                         if param_name and param_value is not None:
                             # Try to convert to float if possible
+                            bus_param_value: Union[str, float, int] = param_value
                             try:
-                                param_value = float(param_value)
+                                bus_param_value = float(param_value)
                             except ValueError:
                                 pass  # Keep as string
 
                             parameters.append(
-                                PresetParameter(name=param_name, value=param_value)
+                                PresetParameter(name=param_name, value=bus_param_value)
                             )
 
                     buses.append(PresetBus(id=bus_id, parameters=parameters))
 
             # Extract scenarios
             scenarios = []
-            scenarios_elem = root.find("scenarios")
+            scenarios_elem = self._find_element_safe(root, "scenarios")
             if scenarios_elem is not None:
                 for scenario_elem in scenarios_elem.findall("scenario"):
                     scenario_name = scenario_elem.get("name", "")
                     scenario_desc = scenario_elem.findtext("description", "")
                     parameters = []
 
-                    params_elem = scenario_elem.find("params")
+                    params_elem = self._find_element_safe(scenario_elem, "params")
                     if params_elem is not None:
                         for param_elem in params_elem.findall("param"):
                             param_name = param_elem.get("name")
@@ -339,13 +361,18 @@ class PresetManager:
 
                             if param_name and param_value is not None:
                                 # Try to convert to float if possible
+                                scenario_param_value: Union[str, float, int] = (
+                                    param_value
+                                )
                                 try:
-                                    param_value = float(param_value)
+                                    scenario_param_value = float(param_value)
                                 except ValueError:
                                     pass  # Keep as string
 
                                 parameters.append(
-                                    PresetParameter(name=param_name, value=param_value)
+                                    PresetParameter(
+                                        name=param_name, value=scenario_param_value
+                                    )
                                 )
 
                     scenarios.append(
@@ -493,7 +520,7 @@ class PresetManager:
         Returns:
             Dictionary containing comparison results
         """
-        comparison = {
+        comparison: Dict[str, Any] = {
             "metadata_changes": {},
             "strip_changes": {},
             "bus_changes": {},
@@ -523,19 +550,19 @@ class PresetManager:
             strip1 = strips1_dict.get(strip_id)
             strip2 = strips2_dict.get(strip_id)
 
-            if strip1 is None:
+            if strip1 is None and strip2 is not None:
                 comparison["strip_changes"][strip_id] = {
                     "status": "added",
-                    "parameters": strip2.parameters,
+                    "parameters": [asdict(p) for p in strip2.parameters],
                 }
                 comparison["summary"]["strips_modified"] += 1
-            elif strip2 is None:
+            elif strip2 is None and strip1 is not None:
                 comparison["strip_changes"][strip_id] = {
                     "status": "removed",
-                    "parameters": strip1.parameters,
+                    "parameters": [asdict(p) for p in strip1.parameters],
                 }
                 comparison["summary"]["strips_modified"] += 1
-            else:
+            elif strip1 is not None and strip2 is not None:
                 # Compare parameters
                 params1_dict = {p.name: p.value for p in strip1.parameters}
                 params2_dict = {p.name: p.value for p in strip2.parameters}
@@ -566,19 +593,19 @@ class PresetManager:
             bus1 = buses1_dict.get(bus_id)
             bus2 = buses2_dict.get(bus_id)
 
-            if bus1 is None:
+            if bus1 is None and bus2 is not None:
                 comparison["bus_changes"][bus_id] = {
                     "status": "added",
-                    "parameters": bus2.parameters,
+                    "parameters": [asdict(p) for p in bus2.parameters],
                 }
                 comparison["summary"]["buses_modified"] += 1
-            elif bus2 is None:
+            elif bus2 is None and bus1 is not None:
                 comparison["bus_changes"][bus_id] = {
                     "status": "removed",
-                    "parameters": bus1.parameters,
+                    "parameters": [asdict(p) for p in bus1.parameters],
                 }
                 comparison["summary"]["buses_modified"] += 1
-            else:
+            elif bus1 is not None and bus2 is not None:
                 # Compare parameters
                 params1_dict = {p.name: p.value for p in bus1.parameters}
                 params2_dict = {p.name: p.value for p in bus2.parameters}
@@ -609,19 +636,19 @@ class PresetManager:
             scenario1 = scenarios1_dict.get(scenario_name)
             scenario2 = scenarios2_dict.get(scenario_name)
 
-            if scenario1 is None:
+            if scenario1 is None and scenario2 is not None:
                 comparison["scenario_changes"][scenario_name] = {
                     "status": "added",
-                    "parameters": scenario2.parameters,
+                    "parameters": [asdict(p) for p in scenario2.parameters],
                 }
                 comparison["summary"]["scenarios_modified"] += 1
-            elif scenario2 is None:
+            elif scenario2 is None and scenario1 is not None:
                 comparison["scenario_changes"][scenario_name] = {
                     "status": "removed",
-                    "parameters": scenario1.parameters,
+                    "parameters": [asdict(p) for p in scenario1.parameters],
                 }
                 comparison["summary"]["scenarios_modified"] += 1
-            else:
+            elif scenario1 is not None and scenario2 is not None:
                 # Compare parameters
                 params1_dict = {p.name: p.value for p in scenario1.parameters}
                 params2_dict = {p.name: p.value for p in scenario2.parameters}
@@ -656,7 +683,7 @@ class PresetManager:
         )
         return comparison
 
-    def list_presets(self, extension: str = None) -> List[Dict[str, str]]:
+    def list_presets(self, extension: Optional[str] = None) -> List[Dict[str, Any]]:
         """List all preset files in preset directory
 
         Args:
@@ -665,7 +692,7 @@ class PresetManager:
         Returns:
             List of preset file information
         """
-        presets = []
+        presets: List[Dict[str, Any]] = []
 
         for preset_file in self.preset_dir.iterdir():
             if preset_file.is_file():
@@ -682,15 +709,15 @@ class PresetManager:
                         }
                     )
 
-        return sorted(presets, key=lambda x: x["modified"], reverse=True)
+        return sorted(presets, key=lambda x: str(x["modified"]), reverse=True)
 
-    def list_backups(self) -> List[Dict[str, str]]:
+    def list_backups(self) -> List[Dict[str, Any]]:
         """List all backup files
 
         Returns:
             List of backup file information
         """
-        backups = []
+        backups: List[Dict[str, Any]] = []
 
         for backup_file in self.backup_dir.iterdir():
             if backup_file.is_file():
@@ -706,7 +733,7 @@ class PresetManager:
                     }
                 )
 
-        return sorted(backups, key=lambda x: x["created"], reverse=True)
+        return sorted(backups, key=lambda x: str(x["created"]), reverse=True)
 
     def create_template(
         self, template_name: str, voicemeeter_type: str = "potato"
@@ -813,10 +840,10 @@ class PresetManager:
         deleted_files = []
 
         # Group backups by original preset name (before timestamp)
-        backup_groups = {}
+        backup_groups: Dict[str, List[Dict[str, Any]]] = {}
         for backup in backups:
             # Extract original name by removing timestamp suffix
-            name_parts = backup["name"].split("_")
+            name_parts = str(backup["name"]).split("_")
             if len(name_parts) >= 3:  # name_YYYYMMDD_HHMMSS
                 original_name = "_".join(name_parts[:-2])
                 if original_name not in backup_groups:
@@ -826,20 +853,20 @@ class PresetManager:
         # Keep only max_backups for each preset
         for original_name, group_backups in backup_groups.items():
             # Sort by creation time (newest first)
-            group_backups.sort(key=lambda x: x["created"], reverse=True)
+            group_backups.sort(key=lambda x: str(x["created"]), reverse=True)
 
             # Delete excess backups
             for backup in group_backups[max_backups:]:
                 try:
-                    os.remove(backup["path"])
-                    deleted_files.append(backup["path"])
+                    os.remove(str(backup["path"]))
+                    deleted_files.append(str(backup["path"]))
                     logger.info(f"Deleted old backup: {backup['path']}")
                 except OSError as e:
                     logger.error(f"Failed to delete backup {backup['path']}: {e}")
 
         return deleted_files
 
-    def _indent_xml(self, elem, level=0):
+    def _indent_xml(self, elem: Any, level: int = 0) -> None:
         """Add indentation to XML elements for pretty printing"""
         i = "\n" + level * "    "
         if len(elem):
@@ -856,64 +883,104 @@ class PresetManager:
                 elem.tail = i
 
     def export_preset_xml(self, preset: VoicemeeterPreset, xml_path: str) -> None:
-        """Export preset to XML format
+        """Export preset to XML format using secure string building
 
         Args:
             preset: VoicemeeterPreset object
             xml_path: Path to save XML file
         """
-        root = Element("voicemeeter_preset")
+        # Build XML as string to avoid using unsafe Element creation
+        xml_lines = ['<?xml version="1.0" encoding="utf-8"?>']
+        xml_lines.append("<voicemeeter_preset>")
 
         # Add metadata
-        metadata_elem = SubElement(root, "metadata")
-        SubElement(metadata_elem, "name").text = preset.metadata.name
-        SubElement(metadata_elem, "description").text = preset.metadata.description
-        SubElement(metadata_elem, "version").text = preset.metadata.version
-        SubElement(metadata_elem, "created").text = preset.metadata.created
+        xml_lines.append("    <metadata>")
+        xml_lines.append(
+            f"        <name>{self._escape_xml(preset.metadata.name)}</name>"
+        )
+        xml_lines.append(
+            f"        <description>{self._escape_xml(preset.metadata.description)}</description>"
+        )
+        xml_lines.append(
+            f"        <version>{self._escape_xml(preset.metadata.version)}</version>"
+        )
+        xml_lines.append(
+            f"        <created>{self._escape_xml(preset.metadata.created)}</created>"
+        )
 
         if preset.metadata.author:
-            SubElement(metadata_elem, "author").text = preset.metadata.author
+            xml_lines.append(
+                f"        <author>{self._escape_xml(preset.metadata.author)}</author>"
+            )
         if preset.metadata.voicemeeter_type:
-            SubElement(metadata_elem, "voicemeeter_type").text = (
-                preset.metadata.voicemeeter_type
+            xml_lines.append(
+                f"        <voicemeeter_type>{self._escape_xml(preset.metadata.voicemeeter_type)}</voicemeeter_type>"
             )
 
         if preset.metadata.tags:
-            tags_elem = SubElement(metadata_elem, "tags")
+            xml_lines.append("        <tags>")
             for tag in preset.metadata.tags:
-                SubElement(tags_elem, "tag").text = tag
+                xml_lines.append(f"            <tag>{self._escape_xml(tag)}</tag>")
+            xml_lines.append("        </tags>")
+
+        xml_lines.append("    </metadata>")
 
         # Add strips
-        strips_elem = SubElement(root, "strips")
+        xml_lines.append("    <strips>")
         for strip in preset.strips:
-            strip_elem = SubElement(strips_elem, "strip", id=str(strip.id))
+            xml_lines.append(f'        <strip id="{strip.id}">')
             for param in strip.parameters:
-                param_elem = SubElement(strip_elem, "param", name=param.name)
-                param_elem.text = str(param.value)
+                xml_lines.append(
+                    f'            <param name="{self._escape_xml(param.name)}">{self._escape_xml(str(param.value))}</param>'
+                )
+            xml_lines.append("        </strip>")
+        xml_lines.append("    </strips>")
 
         # Add buses
-        buses_elem = SubElement(root, "buses")
+        xml_lines.append("    <buses>")
         for bus in preset.buses:
-            bus_elem = SubElement(buses_elem, "bus", id=str(bus.id))
+            xml_lines.append(f'        <bus id="{bus.id}">')
             for param in bus.parameters:
-                param_elem = SubElement(bus_elem, "param", name=param.name)
-                param_elem.text = str(param.value)
+                xml_lines.append(
+                    f'            <param name="{self._escape_xml(param.name)}">{self._escape_xml(str(param.value))}</param>'
+                )
+            xml_lines.append("        </bus>")
+        xml_lines.append("    </buses>")
 
         # Add scenarios
-        scenarios_elem = SubElement(root, "scenarios")
+        xml_lines.append("    <scenarios>")
         for scenario in preset.scenarios:
-            scenario_elem = SubElement(scenarios_elem, "scenario", name=scenario.name)
-            SubElement(scenario_elem, "description").text = scenario.description
-
-            params_elem = SubElement(scenario_elem, "params")
+            xml_lines.append(
+                f'        <scenario name="{self._escape_xml(scenario.name)}">'
+            )
+            xml_lines.append(
+                f"            <description>{self._escape_xml(scenario.description)}</description>"
+            )
+            xml_lines.append("            <params>")
             for param in scenario.parameters:
-                param_elem = SubElement(params_elem, "param", name=param.name)
-                param_elem.text = str(param.value)
+                xml_lines.append(
+                    f'                <param name="{self._escape_xml(param.name)}">{self._escape_xml(str(param.value))}</param>'
+                )
+            xml_lines.append("            </params>")
+            xml_lines.append("        </scenario>")
+        xml_lines.append("    </scenarios>")
 
-        # Write to file with proper formatting
-        tree = ElementTree(root)
-        # Use manual indentation since defusedxml may not have indent function
-        self._indent_xml(root)
-        tree.write(xml_path, encoding="utf-8", xml_declaration=True)
+        xml_lines.append("</voicemeeter_preset>")
+
+        # Write to file
+        with open(xml_path, "w", encoding="utf-8") as f:
+            f.write("\n".join(xml_lines))
 
         logger.info(f"Preset exported to XML: {xml_path}")
+
+    def _escape_xml(self, text: Union[str, int, float]) -> str:
+        """Escape XML special characters"""
+        if not isinstance(text, str):
+            text = str(text)
+        return (
+            text.replace("&", "&amp;")
+            .replace("<", "&lt;")
+            .replace(">", "&gt;")
+            .replace('"', "&quot;")
+            .replace("'", "&#x27;")
+        )
