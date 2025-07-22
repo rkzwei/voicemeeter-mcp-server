@@ -3,16 +3,17 @@
 import asyncio
 import json
 from typing import Any, Dict, List, Optional, Union
+
 from mcp.server import Server
 from mcp.server.models import InitializationOptions
 from mcp.server.stdio import stdio_server
 from mcp.types import (
-    Resource,
-    Tool,
-    TextContent,
-    ImageContent,
     EmbeddedResource,
+    ImageContent,
     LoggingLevel,
+    Resource,
+    TextContent,
+    Tool,
 )
 from pydantic import BaseModel, Field
 
@@ -25,7 +26,53 @@ class VoicemeeterMCPServer:
     def __init__(self):
         self.server = Server("voicemeeter-mcp-server")
         self.vm_api = VoicemeeterAPI()
+        # Store handler references for testing
+        self._list_resources_handler = None
+        self._read_resource_handler = None
+        self._list_tools_handler = None
+        self._call_tool_handler = None
+        # Track background tasks for cleanup
+        self._background_tasks: set = set()
+        self._shutdown_event = asyncio.Event()
         self._setup_handlers()
+
+    async def __aenter__(self):
+        """Async context manager entry."""
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        """Async context manager exit with cleanup."""
+        await self.cleanup()
+
+    def add_background_task(self, task: asyncio.Task):
+        """Add a background task to be managed."""
+        self._background_tasks.add(task)
+        task.add_done_callback(self._background_tasks.discard)
+
+    async def cleanup(self):
+        """Clean up all resources and background tasks."""
+        print("Cleaning up VoicemeeterMCPServer resources...")
+
+        # Signal shutdown to any background tasks
+        self._shutdown_event.set()
+
+        # Cancel all background tasks
+        if self._background_tasks:
+            print(f"Cancelling {len(self._background_tasks)} background tasks...")
+            for task in self._background_tasks:
+                if not task.done():
+                    task.cancel()
+
+            # Wait for tasks to complete cancellation
+            if self._background_tasks:
+                await asyncio.gather(*self._background_tasks, return_exceptions=True)
+
+        # Clean up Voicemeeter API connection
+        if self.vm_api.is_connected:
+            print("Disconnecting from Voicemeeter...")
+            self.vm_api.logout()
+
+        print("VoicemeeterMCPServer cleanup completed.")
 
     def _is_valid_parameter_name(self, param_name: str) -> bool:
         """Validate parameter name format for security."""
@@ -137,6 +184,9 @@ class VoicemeeterMCPServer:
 
             return resources
 
+        # Store handler reference for testing
+        self._list_resources_handler = handle_list_resources
+
         @self.server.read_resource()
         async def handle_read_resource(uri: str) -> str:
             """Read a Voicemeeter resource."""
@@ -247,6 +297,9 @@ class VoicemeeterMCPServer:
 
             return json.dumps({"error": f"Unknown resource: {uri}"})
 
+        # Store handler reference for testing
+        self._read_resource_handler = handle_read_resource
+
         @self.server.list_tools()
         async def handle_list_tools() -> List[Tool]:
             """List available Voicemeeter tools."""
@@ -336,7 +389,10 @@ class VoicemeeterMCPServer:
                         "properties": {
                             "level_type": {
                                 "type": "integer",
-                                "description": "Level type (0=input, 1=output pre-fader, 2=output post-fader, 3=output post-mute)",
+                                "description": (
+                                    "Level type (0=input, 1=output pre-fader, "
+                                    "2=output post-fader, 3=output post-mute)"
+                                ),
                                 "default": 0,
                             },
                             "channels": {
@@ -365,6 +421,9 @@ class VoicemeeterMCPServer:
                 ),
             ]
 
+        # Store handler reference for testing
+        self._list_tools_handler = handle_list_tools
+
         @self.server.call_tool()
         async def handle_call_tool(
             name: str, arguments: Dict[str, Any]
@@ -385,7 +444,10 @@ class VoicemeeterMCPServer:
                         return [
                             TextContent(
                                 type="text",
-                                text="Failed to connect to Voicemeeter. Make sure Voicemeeter is installed and running.",
+                                text=(
+                                    "Failed to connect to Voicemeeter. "
+                                    "Make sure Voicemeeter is installed and running."
+                                ),
                             )
                         ]
 
@@ -483,7 +545,10 @@ class VoicemeeterMCPServer:
                     return [
                         TextContent(
                             type="text",
-                            text=f"{'Successfully set' if success else 'Failed to set'} parameter '{parameter}' to {value}",
+                            text=(
+                                f"{'Successfully set' if success else 'Failed to set'} "
+                                f"parameter '{parameter}' to {value}"
+                            ),
                         )
                     ]
 
@@ -526,6 +591,7 @@ class VoicemeeterMCPServer:
                     # Load XML preset file and apply settings
                     try:
                         import os
+
                         import defusedxml.ElementTree as ET
 
                         # Security: Validate file path and existence
@@ -629,6 +695,27 @@ class VoicemeeterMCPServer:
                     )
                 ]
 
+        # Store handler reference for testing
+        self._call_tool_handler = handle_call_tool
+
+    async def list_resources(self) -> List[Resource]:
+        """Expose list_resources for testing."""
+        return await self._list_resources_handler()
+
+    async def read_resource(self, uri: str) -> str:
+        """Expose read_resource for testing."""
+        return await self._read_resource_handler(uri)
+
+    async def list_tools(self) -> List[Tool]:
+        """Expose list_tools for testing."""
+        return await self._list_tools_handler()
+
+    async def call_tool(
+        self, name: str, arguments: Dict[str, Any]
+    ) -> List[TextContent]:
+        """Expose call_tool for testing."""
+        return await self._call_tool_handler(name, arguments)
+
     async def run(self):
         """Run the MCP server."""
         async with stdio_server() as (read_stream, write_stream):
@@ -648,8 +735,8 @@ class VoicemeeterMCPServer:
 
 async def main():
     """Main entry point."""
-    server = VoicemeeterMCPServer()
-    await server.run()
+    async with VoicemeeterMCPServer() as server:
+        await server.run()
 
 
 if __name__ == "__main__":

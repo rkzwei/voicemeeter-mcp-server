@@ -5,8 +5,8 @@ import ctypes.wintypes
 import os
 import platform
 import time
-from typing import Optional, Dict, Any, List
 from enum import Enum
+from typing import Any, Dict, List, Optional
 
 
 class VoicemeeterType(Enum):

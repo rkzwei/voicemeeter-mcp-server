@@ -1,12 +1,13 @@
 """Tests for Voicemeeter API wrapper."""
 
-import pytest
-from unittest.mock import Mock, patch, MagicMock
 import ctypes
-
-import sys
 import os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
+import sys
+from unittest.mock import MagicMock, Mock, patch
+
+import pytest
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from voicemeeter_mcp_server.voicemeeter_api import VoicemeeterAPI, VoicemeeterType
 
@@ -104,15 +105,15 @@ class TestVoicemeeterAPI:
         """Test successful float parameter retrieval."""
         # Setup mock DLL with proper function signature simulation
         mock_dll = Mock()
-        
+
         # Create a mock function that properly simulates the DLL behavior
         def mock_get_param_func(param_name, value_ptr):
             # Simulate the DLL writing to the pointer
             # Access the original ctypes object through _obj
-            if hasattr(value_ptr, '_obj'):
+            if hasattr(value_ptr, "_obj"):
                 value_ptr._obj.value = 0.5
             return 0  # Success
-        
+
         mock_dll.VBVMR_GetParameterFloat = Mock(side_effect=mock_get_param_func)
 
         self.api._dll = mock_dll
@@ -178,18 +179,267 @@ class TestVoicemeeterAPI:
 
             mock_logout.assert_called_once()
 
+    def test_get_parameter_string_success(self):
+        """Test successful string parameter retrieval."""
+        self.api._dll = Mock()
+        self.api._is_connected = True
+
+        # Create a mock function that simulates writing to the buffer
+        def mock_get_string(param_name, buffer_ptr):
+            # Simulate writing to the buffer
+            buffer_ptr.value = b"Test String"
+            return 0
+
+        self.api._dll.VBVMR_GetParameterStringA = Mock(side_effect=mock_get_string)
+
+        with patch("ctypes.create_string_buffer") as mock_buffer:
+            mock_buffer_instance = Mock()
+            mock_buffer_instance.value = b"Test String"
+            mock_buffer.return_value = mock_buffer_instance
+
+            result = self.api.get_parameter_string("Strip[0].label")
+
+            assert result == "Test String"
+            self.api._dll.VBVMR_GetParameterStringA.assert_called_once()
+
+    def test_get_parameter_string_not_connected(self):
+        """Test string parameter retrieval when not connected."""
+        self.api._dll = None
+
+        result = self.api.get_parameter_string("Strip[0].label")
+
+        assert result is None
+
+    def test_get_parameter_string_failure(self):
+        """Test failed string parameter retrieval."""
+        self.api._dll = Mock()
+        self.api._dll.VBVMR_GetParameterStringA = Mock(return_value=-1)
+
+        with patch("ctypes.create_string_buffer"):
+            result = self.api.get_parameter_string("Strip[0].label")
+
+            assert result is None
+
+    def test_set_parameter_string_success(self):
+        """Test successful string parameter setting."""
+        self.api._dll = Mock()
+        self.api._is_connected = True
+        self.api._dll.VBVMR_SetParameterStringA = Mock(return_value=0)
+
+        result = self.api.set_parameter_string("Strip[0].label", "New Label")
+
+        assert result is True
+        self.api._dll.VBVMR_SetParameterStringA.assert_called_once()
+
+    def test_set_parameter_string_not_connected(self):
+        """Test string parameter setting when not connected."""
+        self.api._dll = None
+
+        result = self.api.set_parameter_string("Strip[0].label", "New Label")
+
+        assert result is False
+
+    def test_set_parameter_string_failure(self):
+        """Test failed string parameter setting."""
+        self.api._dll = Mock()
+        self.api._dll.VBVMR_SetParameterStringA = Mock(return_value=-1)
+
+        result = self.api.set_parameter_string("Strip[0].label", "New Label")
+
+        assert result is False
+
+    def test_get_level_success(self):
+        """Test successful level retrieval."""
+        self.api._dll = Mock()
+        self.api._is_connected = True
+
+        # Create a mock function that simulates writing to the ctypes object
+        def mock_get_level(level_type, channel, value_ref):
+            # The value_ref is created by ctypes.byref(ctypes.c_float())
+            # We need to modify the underlying c_float object
+            value_ref._obj.value = -20.5
+            return 0
+
+        self.api._dll.VBVMR_GetLevel = Mock(side_effect=mock_get_level)
+
+        result = self.api.get_level(0, 1)
+
+        assert result == -20.5
+        self.api._dll.VBVMR_GetLevel.assert_called_once()
+
+    def test_get_level_not_connected(self):
+        """Test level retrieval when not connected."""
+        self.api._dll = None
+
+        result = self.api.get_level(0, 1)
+
+        assert result is None
+
+    def test_get_level_failure(self):
+        """Test failed level retrieval."""
+        self.api._dll = Mock()
+        self.api._dll.VBVMR_GetLevel = Mock(return_value=-1)
+
+        with patch("ctypes.c_float"):
+            result = self.api.get_level(0, 1)
+
+            assert result is None
+
+    def test_is_parameters_dirty_success(self):
+        """Test successful parameters dirty check."""
+        self.api._dll = Mock()
+        self.api._is_connected = True
+        self.api._dll.VBVMR_IsParametersDirty = Mock(return_value=1)
+
+        result = self.api.is_parameters_dirty()
+
+        assert result is True
+        self.api._dll.VBVMR_IsParametersDirty.assert_called_once()
+
+    def test_is_parameters_dirty_not_connected(self):
+        """Test parameters dirty check when not connected."""
+        self.api._dll = None
+
+        result = self.api.is_parameters_dirty()
+
+        assert result is False
+
+    def test_is_parameters_dirty_clean(self):
+        """Test parameters dirty check when clean."""
+        self.api._dll = Mock()
+        self.api._dll.VBVMR_IsParametersDirty = Mock(return_value=0)
+
+        result = self.api.is_parameters_dirty()
+
+        assert result is False
+
+    def test_get_version_success(self):
+        """Test successful version retrieval."""
+        self.api._dll = Mock()
+
+        # Create a mock function that simulates writing to the ctypes object
+        def mock_get_version(version_ref):
+            # The version_ref is created by ctypes.byref(ctypes.c_long())
+            # We need to modify the underlying c_long object
+            version_ref._obj.value = 0x02010008  # Version 2.1.0.8
+            return 0
+
+        self.api._dll.VBVMR_GetVoicemeeterVersion = Mock(side_effect=mock_get_version)
+
+        result = self.api.get_version()
+
+        assert result == "2.1.0.8"
+        self.api._dll.VBVMR_GetVoicemeeterVersion.assert_called_once()
+
+    def test_get_version_not_connected(self):
+        """Test version retrieval when not connected."""
+        self.api._dll = None
+
+        result = self.api.get_version()
+
+        assert result is None
+
+    def test_get_version_failure(self):
+        """Test failed version retrieval."""
+        self.api._dll = Mock()
+        self.api._dll.VBVMR_GetVoicemeeterVersion = Mock(return_value=-1)
+
+        with patch("ctypes.c_long"):
+            result = self.api.get_version()
+
+            assert result is None
+
+    def test_run_voicemeeter_success(self):
+        """Test successful Voicemeeter launch."""
+        self.api._dll = Mock()
+        self.api._dll.VBVMR_RunVoicemeeter = Mock(return_value=0)
+
+        result = self.api.run_voicemeeter(VoicemeeterType.VOICEMEETER)
+
+        assert result is True
+        self.api._dll.VBVMR_RunVoicemeeter.assert_called_once_with(1)
+
+    def test_run_voicemeeter_not_connected(self):
+        """Test Voicemeeter launch when not connected."""
+        self.api._dll = None
+
+        result = self.api.run_voicemeeter(VoicemeeterType.VOICEMEETER)
+
+        assert result is False
+
+    def test_run_voicemeeter_failure(self):
+        """Test failed Voicemeeter launch."""
+        self.api._dll = Mock()
+        self.api._dll.VBVMR_RunVoicemeeter = Mock(return_value=-1)
+
+        result = self.api.run_voicemeeter(VoicemeeterType.VOICEMEETER_BANANA)
+
+        assert result is False
+        self.api._dll.VBVMR_RunVoicemeeter.assert_called_once_with(2)
+
+    def test_get_voicemeeter_type_success(self):
+        """Test successful Voicemeeter type detection."""
+        self.api._dll = Mock()
+
+        # Create a mock function that simulates writing to the ctypes object
+        def mock_get_type(type_ref):
+            # The type_ref is created by ctypes.byref(ctypes.c_long())
+            # We need to modify the underlying c_long object
+            type_ref._obj.value = 2  # Banana
+            return 0
+
+        self.api._dll.VBVMR_GetVoicemeeterType = Mock(side_effect=mock_get_type)
+
+        result = self.api._get_voicemeeter_type()
+
+        assert result == VoicemeeterType.VOICEMEETER_BANANA
+        self.api._dll.VBVMR_GetVoicemeeterType.assert_called_once()
+
+    def test_get_voicemeeter_type_not_connected(self):
+        """Test Voicemeeter type detection when not connected."""
+        self.api._dll = None
+
+        result = self.api._get_voicemeeter_type()
+
+        assert result is None
+
+    def test_get_voicemeeter_type_failure(self):
+        """Test failed Voicemeeter type detection."""
+        self.api._dll = Mock()
+        self.api._dll.VBVMR_GetVoicemeeterType = Mock(return_value=-1)
+
+        with patch("ctypes.c_long"):
+            result = self.api._get_voicemeeter_type()
+
+            assert result is None
+
+    def test_get_voicemeeter_type_unknown(self):
+        """Test Voicemeeter type detection with unknown type."""
+        self.api._dll = Mock()
+        self.api._dll.VBVMR_GetVoicemeeterType = Mock(return_value=0)
+
+        # Mock the type pointer with unknown value
+        with patch("ctypes.c_long") as mock_long:
+            mock_long_instance = Mock()
+            mock_long_instance.value = 99  # Unknown type
+            mock_long.return_value = mock_long_instance
+
+            result = self.api._get_voicemeeter_type()
+
+            assert result is None
+
 
 class TestVoicemeeterType:
     """Test cases for VoicemeeterType enum."""
 
     def test_enum_values(self):
-        """Test enum values."""
+        """Test enum values are correct."""
         assert VoicemeeterType.VOICEMEETER.value == 1
         assert VoicemeeterType.VOICEMEETER_BANANA.value == 2
         assert VoicemeeterType.VOICEMEETER_POTATO.value == 3
 
     def test_enum_names(self):
-        """Test enum names."""
+        """Test enum names are correct."""
         assert VoicemeeterType.VOICEMEETER.name == "VOICEMEETER"
         assert VoicemeeterType.VOICEMEETER_BANANA.name == "VOICEMEETER_BANANA"
         assert VoicemeeterType.VOICEMEETER_POTATO.name == "VOICEMEETER_POTATO"

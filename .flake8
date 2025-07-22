@@ -1,0 +1,6 @@
+[flake8]
+max-line-length = 120
+extend-ignore = E203, W503, F401, F841, E402
+per-file-ignores =
+    tests/*:F401,F841
+    src/voicemeeter_mcp_server/__init__.py:F401
