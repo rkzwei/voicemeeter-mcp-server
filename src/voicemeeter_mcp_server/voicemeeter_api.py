@@ -111,7 +111,7 @@ class VoicemeeterAPI:
 
     def login(self) -> bool:
         """Login to Voicemeeter Remote API."""
-        if not self._load_dll():
+        if not self._load_dll() or self._dll is None:
             return False
 
         try:
@@ -142,6 +142,7 @@ class VoicemeeterAPI:
             self._is_connected = False
             return result == 0
         except Exception:
+            self._is_connected = False
             return False
 
     def _get_voicemeeter_type(self) -> Optional[VoicemeeterType]:

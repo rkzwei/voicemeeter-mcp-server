@@ -685,3 +685,80 @@ class TestVoicemeeterMCPServer:
         assert isinstance(result[0], TextContent)
         assert "Error executing tool" in result[0].text
         assert "Test error" in result[0].text
+
+    @pytest.mark.asyncio
+    async def test_async_context_manager(self):
+        """Test async context manager functionality."""
+        server = VoicemeeterMCPServer()
+
+        async with server as ctx_server:
+            assert ctx_server is server
+
+        # Cleanup should have been called
+
+    @pytest.mark.asyncio
+    async def test_cleanup_with_background_tasks(self):
+        """Test cleanup with background tasks."""
+        server = VoicemeeterMCPServer()
+
+        # Create a real background task that we can cancel
+        async def dummy_task():
+            try:
+                await asyncio.sleep(10)  # Long sleep to ensure it gets cancelled
+            except asyncio.CancelledError:
+                raise
+
+        task = asyncio.create_task(dummy_task())
+        server._background_tasks.add(task)
+
+        # Mock the vm_api to be connected
+        mock_api = Mock()
+        mock_api.is_connected = True
+        mock_api.logout = Mock()
+        server.vm_api = mock_api
+
+        with patch("builtins.print") as mock_print:
+            await server.cleanup()
+
+            # Verify cleanup was called
+            assert task.cancelled()
+            mock_api.logout.assert_called_once()
+            mock_print.assert_any_call("Cleaning up VoicemeeterMCPServer resources...")
+
+    @pytest.mark.asyncio
+    async def test_add_background_task(self):
+        """Test adding background task functionality."""
+        server = VoicemeeterMCPServer()
+
+        # Create a real task for this test
+        async def dummy_task():
+            await asyncio.sleep(0.1)
+
+        task = asyncio.create_task(dummy_task())
+        server.add_background_task(task)
+
+        assert task in server._background_tasks
+
+        # Wait for task to complete and verify it's removed
+        await task
+        assert task not in server._background_tasks
+
+    @pytest.mark.asyncio
+    async def test_main_function(self):
+        """Test the main function."""
+        from voicemeeter_mcp_server.server import main
+
+        with patch(
+            "voicemeeter_mcp_server.server.VoicemeeterMCPServer"
+        ) as mock_server_class:
+            mock_server = Mock()
+            mock_server.__aenter__ = AsyncMock(return_value=mock_server)
+            mock_server.__aexit__ = AsyncMock(return_value=None)
+            mock_server.run = AsyncMock()
+            mock_server_class.return_value = mock_server
+
+            await main()
+
+            # Verify server was created and run was called
+            mock_server_class.assert_called_once()
+            mock_server.run.assert_called_once()

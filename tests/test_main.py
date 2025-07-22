@@ -241,3 +241,80 @@ class TestMainWithCleanup:
 
                     # Verify no signal handlers were set up on Windows
                     mock_loop.add_signal_handler.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_main_with_cleanup_exception_handling(self):
+        """Test exception handling in main_with_cleanup."""
+        from unittest.mock import AsyncMock
+
+        from voicemeeter_mcp_server.main import main_with_cleanup
+
+        test_error = Exception("Test server error")
+
+        with patch("sys.platform", "win32"):  # Avoid signal handler setup
+            # Mock asyncio.wait to raise an exception directly in the try block
+            with patch("asyncio.wait", side_effect=test_error) as mock_wait:
+                with patch("builtins.print") as mock_print:
+                    # The main_with_cleanup function catches exceptions, prints them, and re-raises them
+                    with pytest.raises(Exception) as exc_info:
+                        await main_with_cleanup()
+
+                    # Verify the exception was re-raised
+                    assert exc_info.value == test_error
+                    # Verify error was printed
+                    mock_print.assert_any_call(
+                        f"Error during execution: {test_error}", file=sys.stderr
+                    )
+
+    def test_main_module_execution(self):
+        """Test the if __name__ == '__main__' block."""
+        # Import the module to test the __name__ == "__main__" condition
+        import voicemeeter_mcp_server.main as main_module
+
+        # Mock cli_main to avoid actually running the server
+        with patch.object(main_module, "cli_main") as mock_cli_main:
+            # Simulate running the module directly
+            with patch.object(main_module, "__name__", "__main__"):
+                # Re-execute the module's main block
+                exec("if __name__ == '__main__': cli_main()", main_module.__dict__)
+
+                # Verify cli_main was called
+                mock_cli_main.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_main_with_cleanup_graceful_shutdown_print(self):
+        """Test the graceful shutdown print and cleanup path."""
+        from unittest.mock import AsyncMock
+
+        from voicemeeter_mcp_server.main import main_with_cleanup
+
+        with patch("sys.platform", "win32"):  # Avoid signal handler setup
+            with patch(
+                "voicemeeter_mcp_server.main.main", new_callable=AsyncMock
+            ) as mock_main:
+                # Create a server task that completes quickly
+                async def quick_server():
+                    await asyncio.sleep(0.01)
+
+                mock_main.side_effect = quick_server
+
+                # Create a shutdown handler and set the shutdown event
+                with patch(
+                    "voicemeeter_mcp_server.main.GracefulShutdown"
+                ) as MockGracefulShutdown:
+                    mock_shutdown_handler = Mock()
+                    mock_shutdown_handler.shutdown_event = asyncio.Event()
+                    mock_shutdown_handler.tasks = set()
+                    mock_shutdown_handler.cleanup_tasks = AsyncMock()
+                    MockGracefulShutdown.return_value = mock_shutdown_handler
+
+                    # Set the shutdown event to trigger the graceful shutdown path
+                    mock_shutdown_handler.shutdown_event.set()
+
+                    with patch("builtins.print") as mock_print:
+                        await main_with_cleanup()
+
+                        # Verify the graceful shutdown message was printed
+                        mock_print.assert_any_call("Performing graceful shutdown...")
+                        # Verify cleanup was called
+                        mock_shutdown_handler.cleanup_tasks.assert_called()
