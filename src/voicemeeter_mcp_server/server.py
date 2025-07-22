@@ -731,7 +731,9 @@ class VoicemeeterMCPServer:
                                         continue
 
                                     # At this point, param_value is guaranteed to be a string
-                                    assert isinstance(param_value, str)
+                                    if not isinstance(param_value, str):
+                                        raise ValueError(f"Parameter value must be a string, got {type(param_value)}")
+                                    
                                     try:
                                         # Try as float first
                                         float_value = float(param_value)
@@ -780,116 +782,168 @@ class VoicemeeterMCPServer:
 
                 elif name == "voicemeeter_validate_preset":
                     preset_path = arguments["preset_path"]
-                    
+
                     try:
-                        if preset_path.lower().endswith('.xml'):
+                        if preset_path.lower().endswith(".xml"):
                             preset = self.preset_manager.load_xml_preset(preset_path)
-                        elif preset_path.lower().endswith('.json'):
+                        elif preset_path.lower().endswith(".json"):
                             preset = self.preset_manager.load_preset_json(preset_path)
                         else:
-                            return [TextContent(type="text", text="Unsupported file type. Only .xml and .json files are supported.")]
-                        
-                        return [TextContent(type="text", text=f"Preset '{preset.metadata.name}' is valid ✅\nChecksum: {preset.metadata.checksum}")]
-                    
+                            return [
+                                TextContent(
+                                    type="text",
+                                    text="Unsupported file type. Only .xml and .json files are supported.",
+                                )
+                            ]
+
+                        return [
+                            TextContent(
+                                type="text",
+                                text=f"Preset '{preset.metadata.name}' is valid ✅\nChecksum: {preset.metadata.checksum}",
+                            )
+                        ]
+
                     except PresetValidationError as e:
-                        return [TextContent(type="text", text=f"Preset validation failed ❌: {str(e)}")]
+                        return [
+                            TextContent(
+                                type="text",
+                                text=f"Preset validation failed ❌: {str(e)}",
+                            )
+                        ]
                     except Exception as e:
-                        return [TextContent(type="text", text=f"Error validating preset: {str(e)}")]
+                        return [
+                            TextContent(
+                                type="text", text=f"Error validating preset: {str(e)}"
+                            )
+                        ]
 
                 elif name == "voicemeeter_compare_presets":
                     preset1_path = arguments["preset1_path"]
                     preset2_path = arguments["preset2_path"]
-                    
+
                     try:
                         # Load both presets
-                        if preset1_path.lower().endswith('.xml'):
+                        if preset1_path.lower().endswith(".xml"):
                             preset1 = self.preset_manager.load_xml_preset(preset1_path)
                         else:
                             preset1 = self.preset_manager.load_preset_json(preset1_path)
-                            
-                        if preset2_path.lower().endswith('.xml'):
+
+                        if preset2_path.lower().endswith(".xml"):
                             preset2 = self.preset_manager.load_xml_preset(preset2_path)
                         else:
                             preset2 = self.preset_manager.load_preset_json(preset2_path)
-                        
+
                         # Compare presets
-                        comparison = self.preset_manager.compare_presets(preset1, preset2)
-                        
+                        comparison = self.preset_manager.compare_presets(
+                            preset1, preset2
+                        )
+
                         result = f"Preset Comparison: '{preset1.metadata.name}' vs '{preset2.metadata.name}'\n\n"
                         result += f"Summary:\n"
                         result += f"- Total changes: {comparison['summary']['total_changes']}\n"
                         result += f"- Strips modified: {comparison['summary']['strips_modified']}\n"
                         result += f"- Buses modified: {comparison['summary']['buses_modified']}\n"
                         result += f"- Scenarios modified: {comparison['summary']['scenarios_modified']}\n\n"
-                        
-                        if comparison['summary']['total_changes'] == 0:
+
+                        if comparison["summary"]["total_changes"] == 0:
                             result += "✅ Presets are identical"
                         else:
                             result += "Detailed comparison:\n"
                             result += json.dumps(comparison, indent=2)
-                        
+
                         return [TextContent(type="text", text=result)]
-                    
+
                     except Exception as e:
-                        return [TextContent(type="text", text=f"Error comparing presets: {str(e)}")]
+                        return [
+                            TextContent(
+                                type="text", text=f"Error comparing presets: {str(e)}"
+                            )
+                        ]
 
                 elif name == "voicemeeter_backup_preset":
                     preset_path = arguments["preset_path"]
-                    
+
                     try:
                         backup_path = self.preset_manager.create_backup(preset_path)
-                        return [TextContent(type="text", text=f"Backup created successfully: {backup_path}")]
+                        return [
+                            TextContent(
+                                type="text",
+                                text=f"Backup created successfully: {backup_path}",
+                            )
+                        ]
                     except Exception as e:
-                        return [TextContent(type="text", text=f"Error creating backup: {str(e)}")]
+                        return [
+                            TextContent(
+                                type="text", text=f"Error creating backup: {str(e)}"
+                            )
+                        ]
 
                 elif name == "voicemeeter_list_presets":
                     extension = arguments.get("extension")
-                    
+
                     try:
                         presets = self.preset_manager.list_presets(extension)
-                        
+
                         if not presets:
-                            return [TextContent(type="text", text="No preset files found.")]
-                        
+                            return [
+                                TextContent(type="text", text="No preset files found.")
+                            ]
+
                         result = f"Found {len(presets)} preset file(s):\n\n"
                         for preset in presets:
                             result += f"📄 {preset['name']}{preset['extension']}\n"
                             result += f"   Path: {preset['path']}\n"
                             result += f"   Size: {preset['size']} bytes\n"
                             result += f"   Modified: {preset['modified']}\n\n"
-                        
+
                         return [TextContent(type="text", text=result)]
                     except Exception as e:
-                        return [TextContent(type="text", text=f"Error listing presets: {str(e)}")]
+                        return [
+                            TextContent(
+                                type="text", text=f"Error listing presets: {str(e)}"
+                            )
+                        ]
 
                 elif name == "voicemeeter_create_template":
                     template_name = arguments["template_name"]
                     voicemeeter_type = arguments.get("voicemeeter_type", "potato")
                     save_path = arguments.get("save_path")
-                    
+
                     try:
-                        template = self.preset_manager.create_template(template_name, voicemeeter_type)
-                        
+                        template = self.preset_manager.create_template(
+                            template_name, voicemeeter_type
+                        )
+
                         result = f"Created template '{template_name}' for Voicemeeter {voicemeeter_type.title()}\n"
                         result += f"- {len(template.strips)} strips configured\n"
                         result += f"- {len(template.buses)} buses configured\n"
                         result += f"- {len(template.scenarios)} scenarios included\n"
-                        
+
                         if save_path:
-                            if save_path.lower().endswith('.json'):
-                                self.preset_manager.save_preset_json(template, save_path)
+                            if save_path.lower().endswith(".json"):
+                                self.preset_manager.save_preset_json(
+                                    template, save_path
+                                )
                                 result += f"\n✅ Template saved to: {save_path}"
-                            elif save_path.lower().endswith('.xml'):
-                                self.preset_manager.export_preset_xml(template, save_path)
+                            elif save_path.lower().endswith(".xml"):
+                                self.preset_manager.export_preset_xml(
+                                    template, save_path
+                                )
                                 result += f"\n✅ Template exported to: {save_path}"
                             else:
-                                result += f"\n⚠️ Invalid file extension. Use .json or .xml"
+                                result += (
+                                    f"\n⚠️ Invalid file extension. Use .json or .xml"
+                                )
                         else:
                             result += f"\n💡 Use save_path parameter to save the template to a file"
-                        
+
                         return [TextContent(type="text", text=result)]
                     except Exception as e:
-                        return [TextContent(type="text", text=f"Error creating template: {str(e)}")]
+                        return [
+                            TextContent(
+                                type="text", text=f"Error creating template: {str(e)}"
+                            )
+                        ]
 
                 else:
                     return [TextContent(type="text", text=f"Unknown tool: {name}")]
