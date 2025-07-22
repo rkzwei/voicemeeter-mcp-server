@@ -18,9 +18,8 @@ from dataclasses import asdict, dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
-from xml.etree.ElementTree import Element, ElementTree, SubElement
-
 import defusedxml.ElementTree as ET
+from defusedxml.ElementTree import Element, ElementTree, SubElement
 import jsonschema
 
 logger = logging.getLogger(__name__)
