@@ -2,7 +2,7 @@
 
 import asyncio
 import json
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Union, cast
 
 from mcp.server import Server
 from mcp.server.models import InitializationOptions
@@ -15,6 +15,7 @@ from mcp.types import (
     TextContent,
     Tool,
 )
+from pydantic import AnyUrl
 from pydantic import BaseModel, Field
 
 from .voicemeeter_api import VoicemeeterAPI, VoicemeeterType
@@ -99,19 +100,19 @@ class VoicemeeterMCPServer:
             """List available Voicemeeter resources."""
             resources = [
                 Resource(
-                    uri="voicemeeter://status",
+                    uri=AnyUrl("voicemeeter://status"),
                     name="Voicemeeter Status",
                     description="Current status and connection information",
                     mimeType="application/json",
                 ),
                 Resource(
-                    uri="voicemeeter://version",
+                    uri=AnyUrl("voicemeeter://version"),
                     name="Voicemeeter Version",
                     description="Voicemeeter version information",
                     mimeType="application/json",
                 ),
                 Resource(
-                    uri="voicemeeter://levels",
+                    uri=AnyUrl("voicemeeter://levels"),
                     name="Audio Levels",
                     description="Current audio levels for all channels",
                     mimeType="application/json",
@@ -126,7 +127,7 @@ class VoicemeeterMCPServer:
                     for i in range(3):
                         resources.append(
                             Resource(
-                                uri=f"voicemeeter://strip/{i}",
+                                uri=AnyUrl(f"voicemeeter://strip/{i}"),
                                 name=f"Strip {i}",
                                 description=f"Input strip {i} parameters",
                                 mimeType="application/json",
@@ -135,7 +136,7 @@ class VoicemeeterMCPServer:
                     for i in range(3):
                         resources.append(
                             Resource(
-                                uri=f"voicemeeter://bus/{i}",
+                                uri=AnyUrl(f"voicemeeter://bus/{i}"),
                                 name=f"Bus {i}",
                                 description=f"Output bus {i} parameters",
                                 mimeType="application/json",
@@ -146,7 +147,7 @@ class VoicemeeterMCPServer:
                     for i in range(5):
                         resources.append(
                             Resource(
-                                uri=f"voicemeeter://strip/{i}",
+                                uri=AnyUrl(f"voicemeeter://strip/{i}"),
                                 name=f"Strip {i}",
                                 description=f"Input strip {i} parameters",
                                 mimeType="application/json",
@@ -155,7 +156,7 @@ class VoicemeeterMCPServer:
                     for i in range(5):
                         resources.append(
                             Resource(
-                                uri=f"voicemeeter://bus/{i}",
+                                uri=AnyUrl(f"voicemeeter://bus/{i}"),
                                 name=f"Bus {i}",
                                 description=f"Output bus {i} parameters",
                                 mimeType="application/json",
@@ -166,7 +167,7 @@ class VoicemeeterMCPServer:
                     for i in range(8):
                         resources.append(
                             Resource(
-                                uri=f"voicemeeter://strip/{i}",
+                                uri=AnyUrl(f"voicemeeter://strip/{i}"),
                                 name=f"Strip {i}",
                                 description=f"Input strip {i} parameters",
                                 mimeType="application/json",
@@ -175,7 +176,7 @@ class VoicemeeterMCPServer:
                     for i in range(8):
                         resources.append(
                             Resource(
-                                uri=f"voicemeeter://bus/{i}",
+                                uri=AnyUrl(f"voicemeeter://bus/{i}"),
                                 name=f"Bus {i}",
                                 description=f"Output bus {i} parameters",
                                 mimeType="application/json",
@@ -629,33 +630,38 @@ class VoicemeeterMCPServer:
                         applied_count = 0
                         failed_count = 0
 
-                        for param in root.findall(".//param"):
-                            name = param.get("name")
-                            value = param.text
+                        if root is not None:
+                            params = root.findall(".//param")
 
-                            if name and value is not None:
-                                # Security: Validate parameter name format
-                                if not self._is_valid_parameter_name(name):
-                                    failed_count += 1
-                                    continue
+                            for param in params:
+                                param_name: Optional[str] = param.get("name")
+                                param_value = param.text
 
-                                try:
-                                    # Try as float first
-                                    float_value = float(value)
-                                    if self.vm_api.set_parameter_float(
-                                        name, float_value
-                                    ):
-                                        applied_count += 1
-                                    else:
+                                if param_name and param_value is not None:
+                                    # Security: Validate parameter name format
+                                    if not self._is_valid_parameter_name(param_name):
                                         failed_count += 1
-                                except ValueError:
-                                    # Try as string
-                                    if self.vm_api.set_parameter_string(
-                                        name, str(value)[:256]
-                                    ):  # Limit string length
-                                        applied_count += 1
-                                    else:
-                                        failed_count += 1
+                                        continue
+
+                                    # At this point, param_value is guaranteed to be a string
+                                    assert isinstance(param_value, str)
+                                    try:
+                                        # Try as float first
+                                        float_value = float(param_value)
+                                        if self.vm_api.set_parameter_float(
+                                            param_name, float_value
+                                        ):
+                                            applied_count += 1
+                                        else:
+                                            failed_count += 1
+                                    except ValueError:
+                                        # Try as string
+                                        if self.vm_api.set_parameter_string(
+                                            param_name, param_value[:256]
+                                        ):  # Limit string length
+                                            applied_count += 1
+                                        else:
+                                            failed_count += 1
 
                         result_text = f"Successfully applied {applied_count} parameters from preset '{preset_path}'"
                         if failed_count > 0:

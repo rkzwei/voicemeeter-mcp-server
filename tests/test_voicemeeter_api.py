@@ -439,10 +439,226 @@ class TestVoicemeeterType:
         assert VoicemeeterType.VOICEMEETER_POTATO.value == 3
 
     def test_enum_names(self):
-        """Test enum names are correct."""
+        """Test enum names."""
         assert VoicemeeterType.VOICEMEETER.name == "VOICEMEETER"
         assert VoicemeeterType.VOICEMEETER_BANANA.name == "VOICEMEETER_BANANA"
         assert VoicemeeterType.VOICEMEETER_POTATO.name == "VOICEMEETER_POTATO"
+
+
+class TestVoicemeeterAPIEdgeCases:
+    """Test edge cases and error paths for VoicemeeterAPI."""
+
+    def test_load_dll_exception_handling(self):
+        """Test exception handling in _load_dll."""
+        api = VoicemeeterAPI()
+
+        # Mock platform.machine to raise an exception
+        with patch(
+            "voicemeeter_mcp_server.voicemeeter_api.platform.machine",
+            side_effect=Exception("Platform error"),
+        ):
+            result = api._load_dll()
+            assert result is False
+
+    def test_load_dll_32bit_system(self):
+        """Test DLL loading on 32-bit system."""
+        api = VoicemeeterAPI()
+
+        with patch(
+            "voicemeeter_mcp_server.voicemeeter_api.platform.machine",
+            return_value="i386",
+        ):
+            with patch(
+                "voicemeeter_mcp_server.voicemeeter_api.platform.architecture",
+                return_value=("32bit", ""),
+            ):
+                with patch(
+                    "voicemeeter_mcp_server.voicemeeter_api.ctypes.CDLL",
+                    side_effect=OSError("DLL not found"),
+                ):
+                    result = api._load_dll()
+                    assert result is False
+
+    def test_load_dll_absolute_path_not_exists(self):
+        """Test DLL loading with absolute path that doesn't exist."""
+        api = VoicemeeterAPI()
+
+        with patch(
+            "voicemeeter_mcp_server.voicemeeter_api.os.path.isabs", return_value=True
+        ):
+            with patch(
+                "voicemeeter_mcp_server.voicemeeter_api.os.path.exists",
+                return_value=False,
+            ):
+                result = api._load_dll()
+                assert result is False
+
+    def test_login_exception_in_dll_call(self):
+        """Test login with exception in DLL function call."""
+        api = VoicemeeterAPI()
+
+        # Mock _load_dll to return True so we get to the exception part
+        with patch.object(api, "_load_dll", return_value=True):
+            # Mock DLL
+            mock_dll = Mock()
+            api._dll = mock_dll
+
+            # Mock login function to raise exception
+            mock_dll.VBVMR_Login.side_effect = Exception("DLL call failed")
+
+            result = api.login()
+            assert result is False
+            assert not api._is_connected
+
+    def test_logout_exception_in_dll_call(self):
+        """Test logout with exception in DLL function call."""
+        api = VoicemeeterAPI()
+
+        # Mock DLL
+        mock_dll = Mock()
+        api._dll = mock_dll
+        api._is_connected = True
+
+        # Mock logout function to raise exception
+        mock_dll.VBVMR_Logout.side_effect = Exception("DLL call failed")
+
+        result = api.logout()
+        assert result is False
+        # In the actual implementation, _is_connected is set to False BEFORE the DLL call
+        # So even if the DLL call fails, _is_connected will be False
+        assert not api._is_connected
+
+    def test_get_voicemeeter_type_exception(self):
+        """Test _get_voicemeeter_type with exception."""
+        api = VoicemeeterAPI()
+
+        # Mock DLL
+        mock_dll = Mock()
+        api._dll = mock_dll
+
+        # Mock function to raise exception
+        mock_dll.VBVMR_GetVoicemeeterType.side_effect = Exception("DLL call failed")
+
+        result = api._get_voicemeeter_type()
+        assert result is None
+
+    def test_get_parameter_float_exception(self):
+        """Test get_parameter_float with exception."""
+        api = VoicemeeterAPI()
+
+        # Mock DLL and connection
+        mock_dll = Mock()
+        api._dll = mock_dll
+        api._is_connected = True
+
+        # Mock function to raise exception
+        mock_dll.VBVMR_GetParameterFloat.side_effect = Exception("DLL call failed")
+
+        result = api.get_parameter_float("Strip[0].mute")
+        assert result is None
+
+    def test_set_parameter_float_exception(self):
+        """Test set_parameter_float with exception."""
+        api = VoicemeeterAPI()
+
+        # Mock DLL and connection
+        mock_dll = Mock()
+        api._dll = mock_dll
+        api._is_connected = True
+
+        # Mock function to raise exception
+        mock_dll.VBVMR_SetParameterFloat.side_effect = Exception("DLL call failed")
+
+        result = api.set_parameter_float("Strip[0].mute", 1.0)
+        assert result is False
+
+    def test_get_parameter_string_exception(self):
+        """Test get_parameter_string with exception."""
+        api = VoicemeeterAPI()
+
+        # Mock DLL and connection
+        mock_dll = Mock()
+        api._dll = mock_dll
+        api._is_connected = True
+
+        # Mock function to raise exception
+        mock_dll.VBVMR_GetParameterStringA.side_effect = Exception("DLL call failed")
+
+        result = api.get_parameter_string("Strip[0].label")
+        assert result is None
+
+    def test_set_parameter_string_exception(self):
+        """Test set_parameter_string with exception."""
+        api = VoicemeeterAPI()
+
+        # Mock DLL and connection
+        mock_dll = Mock()
+        api._dll = mock_dll
+        api._is_connected = True
+
+        # Mock function to raise exception
+        mock_dll.VBVMR_SetParameterStringA.side_effect = Exception("DLL call failed")
+
+        result = api.set_parameter_string("Strip[0].label", "Test")
+        assert result is False
+
+    def test_get_level_exception(self):
+        """Test get_level with exception."""
+        api = VoicemeeterAPI()
+
+        # Mock DLL and connection
+        mock_dll = Mock()
+        api._dll = mock_dll
+        api._is_connected = True
+
+        # Mock function to raise exception
+        mock_dll.VBVMR_GetLevel.side_effect = Exception("DLL call failed")
+
+        result = api.get_level(0, 1)
+        assert result is None
+
+    def test_is_parameters_dirty_exception(self):
+        """Test is_parameters_dirty with exception."""
+        api = VoicemeeterAPI()
+
+        # Mock DLL and connection
+        mock_dll = Mock()
+        api._dll = mock_dll
+        api._is_connected = True
+
+        # Mock function to raise exception
+        mock_dll.VBVMR_IsParametersDirty.side_effect = Exception("DLL call failed")
+
+        result = api.is_parameters_dirty()
+        assert result is False
+
+    def test_get_version_exception(self):
+        """Test get_version with exception."""
+        api = VoicemeeterAPI()
+
+        # Mock DLL
+        mock_dll = Mock()
+        api._dll = mock_dll
+
+        # Mock function to raise exception
+        mock_dll.VBVMR_GetVoicemeeterVersion.side_effect = Exception("DLL call failed")
+
+        result = api.get_version()
+        assert result is None
+
+    def test_run_voicemeeter_exception(self):
+        """Test run_voicemeeter with exception."""
+        api = VoicemeeterAPI()
+
+        # Mock DLL
+        mock_dll = Mock()
+        api._dll = mock_dll
+
+        # Mock function to raise exception
+        mock_dll.VBVMR_RunVoicemeeter.side_effect = Exception("DLL call failed")
+
+        result = api.run_voicemeeter(VoicemeeterType.VOICEMEETER)
+        assert result is False
 
 
 if __name__ == "__main__":
