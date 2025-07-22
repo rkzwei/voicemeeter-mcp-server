@@ -695,7 +695,10 @@ class VoicemeeterMCPServer:
                             return [
                                 TextContent(
                                     type="text",
-                                    text=f"Invalid file type. Only .xml files are supported: '{preset_path}'",
+                                    text=(
+                                        f"Invalid file type. Only .xml files are "
+                                        f"supported: '{preset_path}'"
+                                    ),
                                 )
                             ]
 
@@ -705,7 +708,10 @@ class VoicemeeterMCPServer:
                             return [
                                 TextContent(
                                     type="text",
-                                    text=f"Preset file too large (max 10MB): '{preset_path}'",
+                                    text=(
+                                        f"Preset file too large (max 10MB): "
+                                        f"'{preset_path}'"
+                                    ),
                                 )
                             ]
 
@@ -800,7 +806,10 @@ class VoicemeeterMCPServer:
                         return [
                             TextContent(
                                 type="text",
-                                text=f"Preset '{preset.metadata.name}' is valid ✅\nChecksum: {preset.metadata.checksum}",
+                                text=(
+                                    f"Preset '{preset.metadata.name}' is valid ✅\n"
+                                    f"Checksum: {preset.metadata.checksum}"
+                                ),
                             )
                         ]
 
@@ -840,7 +849,7 @@ class VoicemeeterMCPServer:
                         )
 
                         result = f"Preset Comparison: '{preset1.metadata.name}' vs '{preset2.metadata.name}'\n\n"
-                        result += f"Summary:\n"
+                        result += "Summary:\n"
                         result += f"- Total changes: {comparison['summary']['total_changes']}\n"
                         result += f"- Strips modified: {comparison['summary']['strips_modified']}\n"
                         result += f"- Buses modified: {comparison['summary']['buses_modified']}\n"
@@ -933,10 +942,10 @@ class VoicemeeterMCPServer:
                                 result += f"\n✅ Template exported to: {save_path}"
                             else:
                                 result += (
-                                    f"\n⚠️ Invalid file extension. Use .json or .xml"
+                                    "\n⚠️ Invalid file extension. Use .json or .xml"
                                 )
                         else:
-                            result += f"\n💡 Use save_path parameter to save the template to a file"
+                            result += "\n💡 Use save_path parameter to save the template to a file"
 
                         return [TextContent(type="text", text=result)]
                     except Exception as e:

@@ -18,9 +18,9 @@ from dataclasses import asdict, dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
-from xml.etree.ElementTree import Element, ElementTree, SubElement, indent
 
 import defusedxml.ElementTree as ET
+from defusedxml.ElementTree import Element, ElementTree, SubElement
 import jsonschema
 
 logger = logging.getLogger(__name__)
@@ -839,6 +839,22 @@ class PresetManager:
 
         return deleted_files
 
+    def _indent_xml(self, elem, level=0):
+        """Add indentation to XML elements for pretty printing"""
+        i = "\n" + level * "    "
+        if len(elem):
+            if not elem.text or not elem.text.strip():
+                elem.text = i + "    "
+            if not elem.tail or not elem.tail.strip():
+                elem.tail = i
+            for child in elem:
+                self._indent_xml(child, level + 1)
+            if not child.tail or not child.tail.strip():
+                child.tail = i
+        else:
+            if level and (not elem.tail or not elem.tail.strip()):
+                elem.tail = i
+
     def export_preset_xml(self, preset: VoicemeeterPreset, xml_path: str) -> None:
         """Export preset to XML format
 
@@ -886,9 +902,7 @@ class PresetManager:
         # Add scenarios
         scenarios_elem = SubElement(root, "scenarios")
         for scenario in preset.scenarios:
-            scenario_elem = SubElement(
-                scenarios_elem, "scenario", name=scenario.name
-            )
+            scenario_elem = SubElement(scenarios_elem, "scenario", name=scenario.name)
             SubElement(scenario_elem, "description").text = scenario.description
 
             params_elem = SubElement(scenario_elem, "params")
@@ -898,7 +912,8 @@ class PresetManager:
 
         # Write to file with proper formatting
         tree = ElementTree(root)
-        indent(tree, space="    ", level=0)
+        # Use manual indentation since defusedxml may not have indent function
+        self._indent_xml(root)
         tree.write(xml_path, encoding="utf-8", xml_declaration=True)
 
         logger.info(f"Preset exported to XML: {xml_path}")
