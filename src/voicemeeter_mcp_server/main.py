@@ -3,6 +3,7 @@
 import asyncio
 import signal
 import sys
+from typing import Any
 
 from .server import main
 
@@ -10,16 +11,16 @@ from .server import main
 class GracefulShutdown:
     """Handle graceful shutdown of async resources."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.shutdown_event = asyncio.Event()
-        self.tasks: set = set()
+        self.tasks: set[asyncio.Task[Any]] = set()
 
-    def signal_handler(self, signum, frame):
+    def signal_handler(self, signum: int, frame: Any) -> None:
         """Handle shutdown signals."""
         print(f"\nReceived signal {signum}, initiating graceful shutdown...")
         self.shutdown_event.set()
 
-    async def cleanup_tasks(self):
+    async def cleanup_tasks(self) -> None:
         """Cancel all pending tasks and wait for cleanup."""
         if not self.tasks:
             return
@@ -33,13 +34,13 @@ class GracefulShutdown:
         if self.tasks:
             await asyncio.gather(*self.tasks, return_exceptions=True)
 
-    def add_task(self, task: asyncio.Task):
+    def add_task(self, task: asyncio.Task[Any]) -> None:
         """Add a task to be managed."""
         self.tasks.add(task)
         task.add_done_callback(self.tasks.discard)
 
 
-async def main_with_cleanup():
+async def main_with_cleanup() -> None:
     """Main entry point with proper async cleanup."""
     shutdown_handler = GracefulShutdown()
 
@@ -79,7 +80,7 @@ async def main_with_cleanup():
         await shutdown_handler.cleanup_tasks()
 
 
-def cli_main():
+def cli_main() -> None:
     """CLI entry point."""
     try:
         asyncio.run(main_with_cleanup())

@@ -4,55 +4,64 @@ import asyncio
 import json
 from typing import Any, Dict, List, Optional, Union, cast
 
-from mcp.server import Server
+from mcp.server import NotificationOptions, Server
 from mcp.server.models import InitializationOptions
 from mcp.server.stdio import stdio_server
 from mcp.types import (
+    CallToolRequest,
+    CallToolResult,
     EmbeddedResource,
     ImageContent,
+    ListResourcesRequest,
+    ListResourcesResult,
+    ListToolsRequest,
+    ListToolsResult,
     LoggingLevel,
+    ReadResourceRequest,
+    ReadResourceResult,
     Resource,
+    ServerResult,
     TextContent,
+    TextResourceContents,
     Tool,
 )
-from pydantic import AnyUrl
-from pydantic import BaseModel, Field
+from pydantic import AnyUrl, BaseModel, Field
 
-from .voicemeeter_api import VoicemeeterAPI, VoicemeeterType
 from .preset_manager import PresetManager, PresetValidationError
+from .voicemeeter_api import VoicemeeterAPI, VoicemeeterType
 
 
 class VoicemeeterMCPServer:
     """MCP Server for Voicemeeter Remote API integration."""
 
-    def __init__(self):
-        self.server = Server("voicemeeter-mcp-server")
+    def __init__(self) -> None:
+        self.server: Server[Any] = Server("voicemeeter-mcp-server")
         self.vm_api = VoicemeeterAPI()
         self.preset_manager = PresetManager()
         # Store handler references for testing
-        self._list_resources_handler = None
-        self._read_resource_handler = None
-        self._list_tools_handler = None
-        self._call_tool_handler = None
+        self._list_resources_handler: Optional[Any] = None
+        self._read_resource_handler: Optional[Any] = None
+        self._list_tools_handler: Optional[Any] = None
+        self._call_tool_handler: Optional[Any] = None
         # Track background tasks for cleanup
-        self._background_tasks: set = set()
+        self._background_tasks: set[asyncio.Task[Any]] = set()
         self._shutdown_event = asyncio.Event()
         self._setup_handlers()
 
-    async def __aenter__(self):
+    async def __aenter__(self) -> "VoicemeeterMCPServer":
         """Async context manager entry."""
         return self
 
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
+    async def __aexit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
         """Async context manager exit with cleanup."""
         await self.cleanup()
 
-    def add_background_task(self, task: asyncio.Task):
+    def add_background_task(self, task: asyncio.Task[Any]) -> None:
         """Add a background task to be managed."""
         self._background_tasks.add(task)
         task.add_done_callback(self._background_tasks.discard)
 
-    async def cleanup(self):
+    async def cleanup(self) -> None:
         """Clean up all resources and background tasks."""
         print("Cleaning up VoicemeeterMCPServer resources...")
 
@@ -94,10 +103,9 @@ class VoicemeeterMCPServer:
 
         return True
 
-    def _setup_handlers(self):
+    def _setup_handlers(self) -> None:
         """Setup MCP server handlers."""
 
-        @self.server.list_resources()
         async def handle_list_resources() -> List[Resource]:
             """List available Voicemeeter resources."""
             resources = [
@@ -190,7 +198,6 @@ class VoicemeeterMCPServer:
         # Store handler reference for testing
         self._list_resources_handler = handle_list_resources
 
-        @self.server.read_resource()
         async def handle_read_resource(uri: str) -> str:
             """Read a Voicemeeter resource."""
             if not self.vm_api.is_connected:
@@ -263,12 +270,14 @@ class VoicemeeterMCPServer:
                 for param in params:
                     param_name = f"Strip[{strip_id}].{param}"
                     if param in ["label", "device.name"]:
-                        value = self.vm_api.get_parameter_string(param_name)
+                        strip_value: Union[str, float, None] = (
+                            self.vm_api.get_parameter_string(param_name)
+                        )
                     else:
-                        value = self.vm_api.get_parameter_float(param_name)
+                        strip_value = self.vm_api.get_parameter_float(param_name)
 
-                    if value is not None:
-                        strip_data[param] = value
+                    if strip_value is not None:
+                        strip_data[param] = strip_value
 
                 return json.dumps(strip_data)
 
@@ -292,9 +301,11 @@ class VoicemeeterMCPServer:
 
                 for param in params:
                     param_name = f"Bus[{bus_id}].{param}"
-                    value = self.vm_api.get_parameter_float(param_name)
-                    if value is not None:
-                        bus_data[param] = value
+                    bus_value: Union[float, None] = self.vm_api.get_parameter_float(
+                        param_name
+                    )
+                    if bus_value is not None:
+                        bus_data[param] = bus_value
 
                 return json.dumps(bus_data)
 
@@ -303,7 +314,6 @@ class VoicemeeterMCPServer:
         # Store handler reference for testing
         self._read_resource_handler = handle_read_resource
 
-        @self.server.list_tools()
         async def handle_list_tools() -> List[Tool]:
             """List available Voicemeeter tools."""
             return [
@@ -512,7 +522,6 @@ class VoicemeeterMCPServer:
         # Store handler reference for testing
         self._list_tools_handler = handle_list_tools
 
-        @self.server.call_tool()
         async def handle_call_tool(
             name: str, arguments: Dict[str, Any]
         ) -> List[TextContent]:
@@ -590,7 +599,9 @@ class VoicemeeterMCPServer:
                     param_type = arguments.get("type", "float")
 
                     if param_type == "string":
-                        value = self.vm_api.get_parameter_string(parameter)
+                        value: Union[str, float, None] = (
+                            self.vm_api.get_parameter_string(parameter)
+                        )
                     else:
                         value = self.vm_api.get_parameter_float(parameter)
 
@@ -696,7 +707,10 @@ class VoicemeeterMCPServer:
                             return [
                                 TextContent(
                                     type="text",
-                                    text=f"Invalid file type. Only .xml files are supported: '{preset_path}'",
+                                    text=(
+                                        f"Invalid file type. Only .xml files are "
+                                        f"supported: '{preset_path}'"
+                                    ),
                                 )
                             ]
 
@@ -706,7 +720,10 @@ class VoicemeeterMCPServer:
                             return [
                                 TextContent(
                                     type="text",
-                                    text=f"Preset file too large (max 10MB): '{preset_path}'",
+                                    text=(
+                                        f"Preset file too large (max 10MB): "
+                                        f"'{preset_path}'"
+                                    ),
                                 )
                             ]
 
@@ -731,7 +748,11 @@ class VoicemeeterMCPServer:
                                         continue
 
                                     # At this point, param_value is guaranteed to be a string
-                                    assert isinstance(param_value, str)
+                                    if not isinstance(param_value, str):
+                                        raise ValueError(
+                                            f"Parameter value must be a string, got {type(param_value)}"
+                                        )
+
                                     try:
                                         # Try as float first
                                         float_value = float(param_value)
@@ -780,116 +801,175 @@ class VoicemeeterMCPServer:
 
                 elif name == "voicemeeter_validate_preset":
                     preset_path = arguments["preset_path"]
-                    
+
                     try:
-                        if preset_path.lower().endswith('.xml'):
+                        if preset_path.lower().endswith(".xml"):
                             preset = self.preset_manager.load_xml_preset(preset_path)
-                        elif preset_path.lower().endswith('.json'):
+                        elif preset_path.lower().endswith(".json"):
                             preset = self.preset_manager.load_preset_json(preset_path)
                         else:
-                            return [TextContent(type="text", text="Unsupported file type. Only .xml and .json files are supported.")]
-                        
-                        return [TextContent(type="text", text=f"Preset '{preset.metadata.name}' is valid ✅\nChecksum: {preset.metadata.checksum}")]
-                    
+                            return [
+                                TextContent(
+                                    type="text",
+                                    text="Unsupported file type. Only .xml and .json files are supported.",
+                                )
+                            ]
+
+                        return [
+                            TextContent(
+                                type="text",
+                                text=(
+                                    f"Preset '{preset.metadata.name}' is valid ✅\n"
+                                    f"Checksum: {preset.metadata.checksum}"
+                                ),
+                            )
+                        ]
+
                     except PresetValidationError as e:
-                        return [TextContent(type="text", text=f"Preset validation failed ❌: {str(e)}")]
+                        return [
+                            TextContent(
+                                type="text",
+                                text=f"Preset validation failed ❌: {str(e)}",
+                            )
+                        ]
                     except Exception as e:
-                        return [TextContent(type="text", text=f"Error validating preset: {str(e)}")]
+                        return [
+                            TextContent(
+                                type="text", text=f"Error validating preset: {str(e)}"
+                            )
+                        ]
 
                 elif name == "voicemeeter_compare_presets":
                     preset1_path = arguments["preset1_path"]
                     preset2_path = arguments["preset2_path"]
-                    
+
                     try:
                         # Load both presets
-                        if preset1_path.lower().endswith('.xml'):
+                        if preset1_path.lower().endswith(".xml"):
                             preset1 = self.preset_manager.load_xml_preset(preset1_path)
                         else:
                             preset1 = self.preset_manager.load_preset_json(preset1_path)
-                            
-                        if preset2_path.lower().endswith('.xml'):
+
+                        if preset2_path.lower().endswith(".xml"):
                             preset2 = self.preset_manager.load_xml_preset(preset2_path)
                         else:
                             preset2 = self.preset_manager.load_preset_json(preset2_path)
-                        
+
                         # Compare presets
-                        comparison = self.preset_manager.compare_presets(preset1, preset2)
-                        
+                        comparison_result = self.preset_manager.compare_presets(
+                            preset1, preset2
+                        )
+
                         result = f"Preset Comparison: '{preset1.metadata.name}' vs '{preset2.metadata.name}'\n\n"
-                        result += f"Summary:\n"
-                        result += f"- Total changes: {comparison['summary']['total_changes']}\n"
-                        result += f"- Strips modified: {comparison['summary']['strips_modified']}\n"
-                        result += f"- Buses modified: {comparison['summary']['buses_modified']}\n"
-                        result += f"- Scenarios modified: {comparison['summary']['scenarios_modified']}\n\n"
-                        
-                        if comparison['summary']['total_changes'] == 0:
+                        result += "Summary:\n"
+                        result += f"- Total changes: {comparison_result['summary']['total_changes']}\n"
+                        result += f"- Strips modified: {comparison_result['summary']['strips_modified']}\n"
+                        result += f"- Buses modified: {comparison_result['summary']['buses_modified']}\n"
+                        result += f"- Scenarios modified: {comparison_result['summary']['scenarios_modified']}\n\n"
+
+                        if comparison_result["summary"]["total_changes"] == 0:
                             result += "✅ Presets are identical"
                         else:
                             result += "Detailed comparison:\n"
-                            result += json.dumps(comparison, indent=2)
-                        
+                            result += json.dumps(comparison_result, indent=2)
+
                         return [TextContent(type="text", text=result)]
-                    
+
                     except Exception as e:
-                        return [TextContent(type="text", text=f"Error comparing presets: {str(e)}")]
+                        return [
+                            TextContent(
+                                type="text", text=f"Error comparing presets: {str(e)}"
+                            )
+                        ]
 
                 elif name == "voicemeeter_backup_preset":
                     preset_path = arguments["preset_path"]
-                    
+
                     try:
                         backup_path = self.preset_manager.create_backup(preset_path)
-                        return [TextContent(type="text", text=f"Backup created successfully: {backup_path}")]
+                        return [
+                            TextContent(
+                                type="text",
+                                text=f"Backup created successfully: {backup_path}",
+                            )
+                        ]
                     except Exception as e:
-                        return [TextContent(type="text", text=f"Error creating backup: {str(e)}")]
+                        return [
+                            TextContent(
+                                type="text", text=f"Error creating backup: {str(e)}"
+                            )
+                        ]
 
                 elif name == "voicemeeter_list_presets":
                     extension = arguments.get("extension")
-                    
+
                     try:
-                        presets = self.preset_manager.list_presets(extension)
-                        
+                        presets: List[Dict[str, Any]] = (
+                            self.preset_manager.list_presets(extension)
+                        )
+
                         if not presets:
-                            return [TextContent(type="text", text="No preset files found.")]
-                        
+                            return [
+                                TextContent(type="text", text="No preset files found.")
+                            ]
+
                         result = f"Found {len(presets)} preset file(s):\n\n"
-                        for preset in presets:
-                            result += f"📄 {preset['name']}{preset['extension']}\n"
-                            result += f"   Path: {preset['path']}\n"
-                            result += f"   Size: {preset['size']} bytes\n"
-                            result += f"   Modified: {preset['modified']}\n\n"
-                        
+                        for preset_dict in presets:
+                            result += (
+                                f"📄 {preset_dict['name']}{preset_dict['extension']}\n"
+                            )
+                            result += f"   Path: {preset_dict['path']}\n"
+                            result += f"   Size: {preset_dict['size']} bytes\n"
+                            result += f"   Modified: {preset_dict['modified']}\n\n"
+
                         return [TextContent(type="text", text=result)]
                     except Exception as e:
-                        return [TextContent(type="text", text=f"Error listing presets: {str(e)}")]
+                        return [
+                            TextContent(
+                                type="text", text=f"Error listing presets: {str(e)}"
+                            )
+                        ]
 
                 elif name == "voicemeeter_create_template":
                     template_name = arguments["template_name"]
                     voicemeeter_type = arguments.get("voicemeeter_type", "potato")
                     save_path = arguments.get("save_path")
-                    
+
                     try:
-                        template = self.preset_manager.create_template(template_name, voicemeeter_type)
-                        
+                        template = self.preset_manager.create_template(
+                            template_name, voicemeeter_type
+                        )
+
                         result = f"Created template '{template_name}' for Voicemeeter {voicemeeter_type.title()}\n"
                         result += f"- {len(template.strips)} strips configured\n"
                         result += f"- {len(template.buses)} buses configured\n"
                         result += f"- {len(template.scenarios)} scenarios included\n"
-                        
+
                         if save_path:
-                            if save_path.lower().endswith('.json'):
-                                self.preset_manager.save_preset_json(template, save_path)
+                            if save_path.lower().endswith(".json"):
+                                self.preset_manager.save_preset_json(
+                                    template, save_path
+                                )
                                 result += f"\n✅ Template saved to: {save_path}"
-                            elif save_path.lower().endswith('.xml'):
-                                self.preset_manager.export_preset_xml(template, save_path)
+                            elif save_path.lower().endswith(".xml"):
+                                self.preset_manager.export_preset_xml(
+                                    template, save_path
+                                )
                                 result += f"\n✅ Template exported to: {save_path}"
                             else:
-                                result += f"\n⚠️ Invalid file extension. Use .json or .xml"
+                                result += (
+                                    "\n⚠️ Invalid file extension. Use .json or .xml"
+                                )
                         else:
-                            result += f"\n💡 Use save_path parameter to save the template to a file"
-                        
+                            result += "\n💡 Use save_path parameter to save the template to a file"
+
                         return [TextContent(type="text", text=result)]
                     except Exception as e:
-                        return [TextContent(type="text", text=f"Error creating template: {str(e)}")]
+                        return [
+                            TextContent(
+                                type="text", text=f"Error creating template: {str(e)}"
+                            )
+                        ]
 
                 else:
                     return [TextContent(type="text", text=f"Unknown tool: {name}")]
@@ -904,25 +984,86 @@ class VoicemeeterMCPServer:
         # Store handler reference for testing
         self._call_tool_handler = handle_call_tool
 
+        # Create wrapper functions that match the expected MCP handler signature
+        async def list_resources_wrapper(_: Any) -> ServerResult:
+            resources = await handle_list_resources()
+            result = ListResourcesResult(resources=resources)
+            return ServerResult(result)
+
+        async def read_resource_wrapper(request: Any) -> ServerResult:
+            content = await handle_read_resource(request.uri)
+            result = ReadResourceResult(
+                contents=[TextResourceContents(uri=request.uri, text=content)]
+            )
+            return ServerResult(result)
+
+        async def list_tools_wrapper(_: Any) -> ServerResult:
+            tools = await handle_list_tools()
+            result = ListToolsResult(tools=tools)
+            return ServerResult(result)
+
+        async def call_tool_wrapper(request: Any) -> ServerResult:
+            content = await handle_call_tool(request.name, request.arguments)
+            # Cast to the expected union type
+            from typing import Sequence, cast
+
+            from mcp.types import (
+                AudioContent,
+                ResourceLink,
+            )
+
+            content_union = cast(
+                Sequence[
+                    Union[
+                        TextContent,
+                        ImageContent,
+                        AudioContent,
+                        ResourceLink,
+                        EmbeddedResource,
+                    ]
+                ],
+                content,
+            )
+            result = CallToolResult(content=list(content_union))
+            return ServerResult(result)
+
+        # Manually register handlers to avoid untyped decorator issues
+        self.server.request_handlers[ListResourcesRequest] = list_resources_wrapper
+        self.server.request_handlers[ReadResourceRequest] = read_resource_wrapper
+        self.server.request_handlers[ListToolsRequest] = list_tools_wrapper
+        self.server.request_handlers[CallToolRequest] = call_tool_wrapper
+
     async def list_resources(self) -> List[Resource]:
         """Expose list_resources for testing."""
-        return await self._list_resources_handler()
+        if self._list_resources_handler is None:
+            raise RuntimeError("Handler not initialized")
+        result = await self._list_resources_handler()
+        return cast(List[Resource], result)
 
     async def read_resource(self, uri: str) -> str:
         """Expose read_resource for testing."""
-        return await self._read_resource_handler(uri)
+        if self._read_resource_handler is None:
+            raise RuntimeError("Handler not initialized")
+        result = await self._read_resource_handler(uri)
+        return cast(str, result)
 
     async def list_tools(self) -> List[Tool]:
         """Expose list_tools for testing."""
-        return await self._list_tools_handler()
+        if self._list_tools_handler is None:
+            raise RuntimeError("Handler not initialized")
+        result = await self._list_tools_handler()
+        return cast(List[Tool], result)
 
     async def call_tool(
         self, name: str, arguments: Dict[str, Any]
     ) -> List[TextContent]:
         """Expose call_tool for testing."""
-        return await self._call_tool_handler(name, arguments)
+        if self._call_tool_handler is None:
+            raise RuntimeError("Handler not initialized")
+        result = await self._call_tool_handler(name, arguments)
+        return cast(List[TextContent], result)
 
-    async def run(self):
+    async def run(self) -> None:
         """Run the MCP server."""
         async with stdio_server() as (read_stream, write_stream):
             await self.server.run(
@@ -932,14 +1073,14 @@ class VoicemeeterMCPServer:
                     server_name="voicemeeter-mcp-server",
                     server_version="0.1.0",
                     capabilities=self.server.get_capabilities(
-                        notification_options=None,
-                        experimental_capabilities=None,
+                        notification_options=NotificationOptions(),
+                        experimental_capabilities={},
                     ),
                 ),
             )
 
 
-async def main():
+async def main() -> None:
     """Main entry point."""
     async with VoicemeeterMCPServer() as server:
         await server.run()
